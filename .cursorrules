@@ -1,0 +1,6 @@
+# Quy Định Dành Cho Cursor AI
+
+Khi thực hiện tính năng mới hoặc triển khai dự án trong repository này:
+- Bắt buộc tuân thủ quy trình đa vai trò (Planner -> Coder -> Tester -> Reviewer) được mô tả tại `.ai/workflow.md`.
+- Tham khảo thông tin dự án và các lệnh kiểm thử tại `AGENTS.md`.
+- Với các sửa đổi nhỏ (sửa chính tả, đổi chữ, 1 dòng code không ảnh hưởng logic): bỏ qua quy trình.
