@@ -1,0 +1,34 @@
+{
+  "classes": [
+    {
+      "name": "Warrior",
+      "description": "A durable frontline fighter who controls nearby enemies.",
+      "baseHp": 150,
+      "baseAttack": 25,
+      "baseDefense": 15,
+      "moveSpeed": 4.5,
+      "dodgeCooldown": 0.8,
+      "skillIds": ["warrior_slash", "shield_bash"]
+    },
+    {
+      "name": "Assassin",
+      "description": "A fast striker who relies on evasive movement and bleeding attacks.",
+      "baseHp": 90,
+      "baseAttack": 32,
+      "baseDefense": 5,
+      "moveSpeed": 6.0,
+      "dodgeCooldown": 0.5,
+      "skillIds": ["shadow_strike", "twin_daggers"]
+    },
+    {
+      "name": "Mage",
+      "description": "A fragile ranged caster with area damage and control.",
+      "baseHp": 80,
+      "baseAttack": 40,
+      "baseDefense": 2,
+      "moveSpeed": 4.0,
+      "dodgeCooldown": 0.8,
+      "skillIds": ["fireball", "frost_nova"]
+    }
+  ]
+}

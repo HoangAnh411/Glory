@@ -1,0 +1,149 @@
+#include "glory/game/character_controller.hpp"
+
+#include <glm/geometric.hpp>
+#include <glm/vec2.hpp>
+
+#include <cmath>
+#include <algorithm>
+#include <iostream>
+#include <utility>
+#include <vector>
+
+namespace {
+int failures = 0;
+
+void expect(bool condition, const char* message) {
+    if (!condition) {
+        std::cerr << "FAIL: " << message << '\n';
+        ++failures;
+    }
+}
+
+bool nearlyEqual(float left, float right, float epsilon = 1.0e-3F) {
+    return std::abs(left - right) <= epsilon;
+}
+
+void applyInput(glory::game::ActionMap& actions, std::vector<glory::input::Control> held,
+    std::vector<glory::input::Control> pressed = {}) {
+    glory::input::InputFrame frame;
+    frame.held = std::move(held);
+    frame.pressed = std::move(pressed);
+    actions.update(frame);
+}
+
+void testCameraRelativeMovement() {
+    using glory::game::Action;
+    using glory::game::ActionMap;
+    using glory::game::CharacterController;
+    using glory::input::Control;
+    ActionMap actions;
+    CharacterController controller;
+    applyInput(actions, {Control::KeyW});
+    controller.update(actions, -90.0F, 1.0);
+    expect(nearlyEqual(controller.state().position.z, -5.5F), "forward follows camera yaw");
+
+    applyInput(actions, {Control::KeyS});
+    controller.update(actions, -90.0F, 1.0);
+    expect(nearlyEqual(controller.state().position.z, 0.0F), "backward reverses forward movement");
+
+    applyInput(actions, {Control::KeyD});
+    controller.update(actions, -90.0F, 1.0);
+    expect(nearlyEqual(controller.state().position.x, 5.5F), "right strafe follows camera right vector");
+
+    applyInput(actions, {Control::KeyW, Control::KeyD});
+    const glm::vec3 before = controller.state().position;
+    controller.update(actions, 0.0F, 1.0);
+    expect(nearlyEqual(glm::length(controller.state().position - before), 5.5F),
+        "diagonal movement is normalized to run speed");
+}
+
+void testJumpGravityAndGrounding() {
+    using namespace glory::game;
+    ActionMap actions;
+    CharacterController controller;
+    applyInput(actions, {glory::input::Control::KeySpace}, {glory::input::Control::KeySpace});
+    controller.update(actions, -90.0F, 1.0 / 120.0);
+    expect(!controller.state().isGrounded && controller.state().velocity.y > 0.0F,
+        "jump starts only from the grounded state");
+    float highestY = controller.state().position.y;
+    applyInput(actions, {});
+    for (int tick = 0; tick < 1200; ++tick) {
+        controller.update(actions, -90.0F, 1.0 / 120.0);
+        highestY = std::max(highestY, controller.state().position.y);
+    }
+    expect(highestY > 1.0F, "jump reaches a positive apex");
+    expect(nearlyEqual(controller.state().position.y, 0.0F), "falling character lands on the ground plane");
+    expect(nearlyEqual(controller.state().velocity.y, 0.0F) && controller.state().isGrounded,
+        "landing resets vertical velocity and grounded state");
+}
+
+void testFacingRotationAndAttackEdge() {
+    using namespace glory::game;
+    ActionMap actions;
+    CharacterController controller;
+    applyInput(actions, {glory::input::Control::KeyW});
+    controller.update(actions, 0.0F, 0.1);
+    expect(controller.state().facingYaw > -90.0F && controller.state().facingYaw < 0.0F,
+        "facing turns smoothly toward the movement direction");
+    for (int tick = 0; tick < 10; ++tick) controller.update(actions, 0.0F, 0.1);
+    expect(nearlyEqual(controller.state().facingYaw, 0.0F), "facing converges to movement direction");
+
+    applyInput(actions, {glory::input::Control::MouseLeft}, {glory::input::Control::MouseLeft});
+    controller.update(actions, 0.0F, 1.0 / 60.0);
+    expect(controller.state().attackRequested, "primary attack emits a one-tick request");
+    applyInput(actions, {glory::input::Control::MouseLeft});
+    controller.update(actions, 0.0F, 1.0 / 60.0);
+    expect(!controller.state().attackRequested, "held attack does not retrigger each tick");
+}
+
+void testDodgeSpeedIFramesAndCooldown() {
+    using namespace glory::game;
+    ActionMap actions;
+    CharacterController controller;
+    glory::input::InputFrame frame;
+    frame.held = {glory::input::Control::KeyLeftShift};
+    frame.pressed = frame.held;
+    actions.update(frame);
+    controller.update(actions, -90.0F, 0.05);
+    expect(controller.state().isDodging, "dodge starts on the dodge action press");
+    expect(controller.state().isInvulnerable, "i-frame activates at the configured window start");
+    expect(nearlyEqual(glm::length(glm::vec2(controller.state().velocity.x, controller.state().velocity.z)), 12.0F),
+        "dodge uses the configured dash speed");
+    expect(controller.state().position.z < -0.5F, "stationary dodge uses the facing direction");
+
+    frame.pressed.clear();
+    actions.update(frame);
+    controller.update(actions, -90.0F, 0.23);
+    expect(!controller.state().isInvulnerable, "i-frame expires at the configured window end");
+    controller.update(actions, -90.0F, 0.07);
+    expect(!controller.state().isDodging, "dash ends at dodge duration");
+
+    frame.pressed = {glory::input::Control::KeyLeftShift};
+    actions.update(frame);
+    controller.update(actions, -90.0F, 0.01);
+    expect(!controller.state().isDodging, "cooldown prevents an immediate second dash");
+
+    frame.pressed.clear();
+    frame.held.clear();
+    actions.update(frame);
+    controller.update(actions, -90.0F, 0.49);
+    frame.held = {glory::input::Control::KeyLeftShift};
+    frame.pressed = frame.held;
+    actions.update(frame);
+    controller.update(actions, -90.0F, 0.01);
+    expect(controller.state().isDodging, "dodge can be used again after its cooldown expires");
+}
+} // namespace
+
+int main() {
+    testCameraRelativeMovement();
+    testJumpGravityAndGrounding();
+    testFacingRotationAndAttackEdge();
+    testDodgeSpeedIFramesAndCooldown();
+    if (failures != 0) {
+        std::cerr << failures << " character controller test(s) failed\n";
+        return 1;
+    }
+    std::cout << "All character controller tests passed\n";
+    return 0;
+}

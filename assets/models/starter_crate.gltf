@@ -1,0 +1,56 @@
+{
+  "asset": { "version": "2.0", "generator": "Glory skeletal animation sample" },
+  "scene": 0,
+  "scenes": [{ "nodes": [0, 1] }],
+  "nodes": [
+    { "name": "CrateMesh", "mesh": 0, "skin": 0 },
+    { "name": "RootJoint", "children": [2] },
+    { "name": "UpperJoint" }
+  ],
+  "meshes": [{ "name": "Animated Crate", "primitives": [{
+    "attributes": { "POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2, "JOINTS_0": 3, "WEIGHTS_0": 4 },
+    "indices": 5, "material": 0
+  }] }],
+  "skins": [{ "name": "Crate Skeleton", "inverseBindMatrices": 8, "skeleton": 1, "joints": [1, 2] }],
+  "animations": [
+    { "name": "Idle", "samplers": [{ "input": 6, "output": 9, "interpolation": "LINEAR" }],
+      "channels": [{ "sampler": 0, "target": { "node": 2, "path": "rotation" } }] },
+    { "name": "Run", "samplers": [{ "input": 6, "output": 10, "interpolation": "LINEAR" }],
+      "channels": [{ "sampler": 0, "target": { "node": 2, "path": "rotation" } }] },
+    { "name": "Attack", "samplers": [{ "input": 6, "output": 11, "interpolation": "LINEAR" }],
+      "channels": [{ "sampler": 0, "target": { "node": 2, "path": "rotation" } }],
+      "extras": { "events": [{ "time": 0.3, "name": "hit_frame", "parameters": { "damage": "10" } }, { "time": 0.6, "name": "swing_sound" }] } }
+  ],
+  "materials": [{ "pbrMetallicRoughness": { "baseColorTexture": { "index": 0 } } }],
+  "textures": [{ "source": 0 }],
+  "images": [{ "uri": "../textures/starter_crate.png" }],
+  "buffers": [{ "uri": "starter_crate.bin", "byteLength": 1748 }],
+  "bufferViews": [
+    { "buffer": 0, "byteOffset": 0, "byteLength": 288, "target": 34962 },
+    { "buffer": 0, "byteOffset": 288, "byteLength": 288, "target": 34962 },
+    { "buffer": 0, "byteOffset": 576, "byteLength": 192, "target": 34962 },
+    { "buffer": 0, "byteOffset": 768, "byteLength": 192, "target": 34962 },
+    { "buffer": 0, "byteOffset": 960, "byteLength": 384, "target": 34962 },
+    { "buffer": 0, "byteOffset": 1344, "byteLength": 72, "target": 34963 },
+    { "buffer": 0, "byteOffset": 1416, "byteLength": 12 },
+    { "buffer": 0, "byteOffset": 1428, "byteLength": 48 },
+    { "buffer": 0, "byteOffset": 1476, "byteLength": 128 },
+    { "buffer": 0, "byteOffset": 1604, "byteLength": 48 },
+    { "buffer": 0, "byteOffset": 1652, "byteLength": 48 },
+    { "buffer": 0, "byteOffset": 1700, "byteLength": 48 }
+  ],
+  "accessors": [
+    { "bufferView": 0, "componentType": 5126, "count": 24, "type": "VEC3", "min": [-0.7, -0.7, -0.7], "max": [0.7, 0.7, 0.7] },
+    { "bufferView": 1, "componentType": 5126, "count": 24, "type": "VEC3" },
+    { "bufferView": 2, "componentType": 5126, "count": 24, "type": "VEC2" },
+    { "bufferView": 3, "componentType": 5123, "count": 24, "type": "VEC4" },
+    { "bufferView": 4, "componentType": 5126, "count": 24, "type": "VEC4" },
+    { "bufferView": 5, "componentType": 5123, "count": 36, "type": "SCALAR" },
+    { "bufferView": 6, "componentType": 5126, "count": 3, "type": "SCALAR", "min": [0.0], "max": [1.0] },
+    { "bufferView": 7, "componentType": 5126, "count": 3, "type": "VEC4" },
+    { "bufferView": 8, "componentType": 5126, "count": 2, "type": "MAT4" },
+    { "bufferView": 9, "componentType": 5126, "count": 3, "type": "VEC4" },
+    { "bufferView": 10, "componentType": 5126, "count": 3, "type": "VEC4" },
+    { "bufferView": 11, "componentType": 5126, "count": 3, "type": "VEC4" }
+  ]
+}
