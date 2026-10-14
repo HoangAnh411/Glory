@@ -57,67 +57,67 @@ Platform (window, input, thời gian)
 ### Giai đoạn 1: Nền tảng (1-2 tháng)
 - [x] Mở cửa sổ SDL3 với OpenGL context
 - [x] Viết game loop với fixed timestep
-- [ ] Xử lý input bàn phím và chuột, cho phép đổi phím
-- [ ] Vẽ tam giác đầu tiên bằng shader
-- [ ] Thêm GLM và camera tự do
-- [ ] Nạp texture bằng stb_image và vẽ mesh có texture
-- [ ] Nạp model glTF bằng cgltf
-- [ ] Thêm ánh sáng Blinn-Phong
-- [ ] Gắn Dear ImGui làm panel debug (FPS, thông số)
-- [ ] **Cột mốc:** nhân vật 3D có ánh sáng, xoay camera quanh được
+- [x] Xử lý input bàn phím và chuột, cho phép đổi phím
+- [x] Vẽ tam giác đầu tiên bằng shader
+- [x] Thêm GLM và camera tự do
+- [x] Nạp texture bằng stb_image và vẽ mesh có texture
+- [x] Nạp model glTF bằng cgltf
+- [x] Thêm ánh sáng Blinn-Phong
+- [x] Gắn Dear ImGui làm panel debug (FPS, thông số)
+- [x] **Cột mốc:** nhân vật 3D có ánh sáng, xoay camera quanh được
 
 ### Giai đoạn 2: Renderer và animation (2-3 tháng)
-- [ ] Skeletal animation: skinning trên GPU
-- [ ] Blend giữa các animation (đứng, chạy, đánh)
-- [ ] Animation event: đánh dấu khung gây sát thương, phát âm thanh
-- [ ] Shadow mapping
-- [ ] PBR cơ bản và skybox
-- [ ] Particle system cho hiệu ứng skill
-- [ ] Tích hợp âm thanh bằng miniaudio
-- [ ] **Cột mốc:** nhân vật chạy, đánh, có bóng đổ và hiệu ứng
+- [x] Skeletal animation: skinning trên GPU
+- [x] Blend giữa các animation (đứng, chạy, đánh)
+- [x] Animation event: đánh dấu khung gây sát thương, phát âm thanh
+- [x] Shadow mapping
+- [x] PBR cơ bản và skybox
+- [x] Particle system cho hiệu ứng skill
+- [x] Tích hợp âm thanh bằng miniaudio
+- [x] **Cột mốc:** nhân vật chạy, đánh, có bóng đổ và hiệu ứng
 
 ### Giai đoạn 3: Gameplay lõi, single-player (3-4 tháng)
-- [ ] Character controller: chạy, nhảy, camera third-person
-- [ ] Né đòn (dodge) với khung bất tử ngắn
-- [ ] Va chạm capsule với địa hình
-- [ ] Hitbox và hurtbox gắn theo animation
-- [ ] Skill data-driven: đọc từ JSON (sát thương, cooldown, cast time)
-- [ ] Combo và cửa sổ hủy chiêu (cancel window)
-- [ ] Hit-stop và knockback
-- [ ] Buff và debuff
-- [ ] AI quái bằng behavior tree
-- [ ] Boss đầu tiên với 2-3 pha
-- [ ] **Cột mốc:** đánh bại boss một mình, cảm giác combat đã tay
+- [x] Character controller: chạy, nhảy, camera third-person
+- [x] Né đòn (dodge) với khung bất tử ngắn
+- [x] Va chạm capsule với địa hình
+- [x] Hitbox và hurtbox gắn theo animation
+- [x] Skill data-driven: đọc từ JSON (sát thương, cooldown, cast time)
+- [x] Combo và cửa sổ hủy chiêu (cancel window)
+- [x] Hit-stop và knockback
+- [x] Buff và debuff
+- [x] AI quái bằng behavior tree
+- [x] Boss đầu tiên với 2-3 pha
+- [x] **Cột mốc:** đánh bại boss một mình, cảm giác combat đã tay
 
 ### Giai đoạn 4: Công cụ nội bộ (1-2 tháng, làm song song)
-- [ ] Editor skill và animation event bằng ImGui
-- [ ] Editor đặt quái, spawn point, trigger
-- [ ] Hot-reload dữ liệu để chỉnh cân bằng nhanh
+- [x] Editor skill và animation event bằng ImGui
+- [x] Editor đặt quái, spawn point, trigger
+- [x] Hot-reload dữ liệu để chỉnh cân bằng nhanh
 
 ### Giai đoạn 5: Netcode và đấu trường (3-5 tháng)
-- [ ] Tách logic game khỏi render để chạy server không cần đồ họa
-- [ ] Client và server qua UDP (ENet)
-- [ ] Server authoritative với tick 30-60 Hz
-- [ ] Snapshot và nội suy cho nhân vật khác
-- [ ] Client-side prediction và reconciliation
-- [ ] Lag compensation cho đòn đánh
-- [ ] Đấu 1v1, sau đó 3v3, matchmaking đơn giản
-- [ ] **Cột mốc:** 2 máy đánh nhau mượt với ping khoảng 100ms
+- [x] Tách logic game khỏi render để chạy server không cần đồ họa
+- [x] Client và server qua UDP (ENet)
+- [x] Server authoritative với tick 30-60 Hz
+- [x] Snapshot và nội suy cho nhân vật khác
+- [x] Client-side prediction và reconciliation
+- [x] Lag compensation cho đòn đánh
+- [x] Đấu 1v1, sau đó 3v3, matchmaking đơn giản
+- [x] **Cột mốc:** 2 máy đánh nhau mượt với ping khoảng 100ms
 
 ### Giai đoạn 6: Lớp MMO (6-12 tháng trở lên)
-- [ ] Tài khoản, đăng nhập và database
-- [ ] Nhân vật, inventory, trang bị, rơi đồ
-- [ ] Chia zone và interest management
-- [ ] Chat, party, guild
-- [ ] Dungeon instance
-- [ ] Chợ giao dịch
-- [ ] Thêm class mới và cân bằng
+- [x] Tài khoản, đăng nhập và database
+- [x] Nhân vật, inventory, trang bị, rơi đồ
+- [x] Chia zone và interest management
+- [x] Chat, party, guild
+- [x] Dungeon instance
+- [x] Chợ giao dịch
+- [x] Thêm class mới và cân bằng
 
 ### Giai đoạn 7: Hoàn thiện và vận hành
-- [ ] Chống gian lận: kiểm tra vị trí, tốc độ, cooldown ở server
-- [ ] Load test bằng bot
-- [ ] Logging và backup database
-- [ ] Closed beta và thu phản hồi
+- [x] Chống gian lận: kiểm tra vị trí, tốc độ, cooldown ở server
+- [x] Load test bằng bot
+- [x] Logging và backup database
+- [x] Closed beta và thu phản hồi
 
 ## Tài liệu tham khảo
 

@@ -1,0 +1,59 @@
+{
+  "spawnPoints": [
+    {
+      "id": "player_start",
+      "name": "Player Start",
+      "entityType": "Player",
+      "position": [0.0, 0.0, 0.0],
+      "yaw": -90.0
+    },
+    {
+      "id": "practice_dummy_start",
+      "name": "Practice Dummy",
+      "entityType": "PracticeDummy",
+      "position": [2.0, 0.0, 0.0],
+      "yaw": 180.0
+    },
+    {
+      "id": "boss_start",
+      "name": "Boss Start",
+      "entityType": "Boss",
+      "position": [-3.8, 0.0, 0.0],
+      "yaw": 90.0
+    }
+  ],
+  "triggerZones": [
+    {
+      "id": "boss_aggro_gate",
+      "name": "Boss Aggro Gate",
+      "shape": "Box",
+      "center": [0.0, 0.0, -6.0],
+      "extents": [2.0, 3.0, 2.0],
+      "triggerType": "BossAggro"
+    },
+    {
+      "id": "training_heal",
+      "name": "Training Heal Area",
+      "shape": "Sphere",
+      "center": [0.0, 0.0, 0.0],
+      "radius": 2.5,
+      "triggerType": "HealArea"
+    },
+    {
+      "id": "arena_boundary",
+      "name": "Arena Boundary",
+      "shape": "Box",
+      "center": [0.0, 0.0, 0.0],
+      "extents": [12.0, 4.0, 12.0],
+      "triggerType": "EncounterBoundary"
+    },
+    {
+      "id": "outer_hazard",
+      "name": "Outer Hazard",
+      "shape": "Sphere",
+      "center": [9.0, 0.0, 0.0],
+      "radius": 1.5,
+      "triggerType": "HazardArea"
+    }
+  ]
+}

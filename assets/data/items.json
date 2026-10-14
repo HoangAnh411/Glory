@@ -1,0 +1,44 @@
+{
+  "items": [
+    {
+      "id": "training_blade",
+      "name": "Training Blade",
+      "type": "Weapon",
+      "rarity": "Common",
+      "bonusAttack": 5,
+      "bonusDefense": 0,
+      "bonusMaxHp": 0,
+      "maxStack": 1
+    },
+    {
+      "id": "iron_armor",
+      "name": "Iron Armor",
+      "type": "Armor",
+      "rarity": "Common",
+      "bonusAttack": 0,
+      "bonusDefense": 4,
+      "bonusMaxHp": 15,
+      "maxStack": 1
+    },
+    {
+      "id": "sunstone_ring",
+      "name": "Sunstone Ring",
+      "type": "Accessory",
+      "rarity": "Rare",
+      "bonusAttack": 2,
+      "bonusDefense": 1,
+      "bonusMaxHp": 10,
+      "maxStack": 1
+    },
+    {
+      "id": "healing_tonic",
+      "name": "Healing Tonic",
+      "type": "Consumable",
+      "rarity": "Common",
+      "bonusAttack": 0,
+      "bonusDefense": 0,
+      "bonusMaxHp": 0,
+      "maxStack": 20
+    }
+  ]
+}
