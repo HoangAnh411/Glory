@@ -633,6 +633,11 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                         player.isGrounded ? "Yes" : "No", player.collisionCount);
 
                     ImGui::SeparatorText("Shadows");
+                    static const char* lightingViews[] = {"Lit", "Albedo only", "World normal", "Ambient only",
+                        "Direct light only", "Shadow factor", "Fog factor", "Depth", "Invalid values (magenta)"};
+                    int lightingView = renderer.lightingDebugView();
+                    if (ImGui::Combo("Lighting debug view", &lightingView, lightingViews, 9))
+                        renderer.setLightingDebugView(lightingView);
                     bool shadowsEnabled = renderer.shadowsEnabled();
                     if (ImGui::Checkbox("Enable Shadow", &shadowsEnabled)) renderer.setShadowsEnabled(shadowsEnabled);
                     static int lightingPreset = 0;

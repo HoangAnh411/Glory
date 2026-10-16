@@ -81,6 +81,8 @@ public:
     [[nodiscard]] int pcfSamples() const noexcept { return pcfSamples_; }
     void setCascadeDebug(bool enabled) noexcept { cascadeDebug_ = enabled; }
     [[nodiscard]] bool cascadeDebug() const noexcept { return cascadeDebug_; }
+    void setLightingDebugView(int view) noexcept { lightingDebugView_ = std::clamp(view, 0, 8); }
+    [[nodiscard]] int lightingDebugView() const noexcept { return lightingDebugView_; }
     void setPbrMaterial(float metallic, float roughness, float ao) noexcept;
     [[nodiscard]] float metallic() const noexcept { return metallic_; }
     [[nodiscard]] float roughness() const noexcept { return roughness_; }
@@ -117,6 +119,7 @@ private:
     float shadowFar_ = 100.0F;
     int pcfSamples_ = 16;
     bool cascadeDebug_ = false;
+    int lightingDebugView_ = 0;
     float metallic_ = 0.0F;
     float roughness_ = 0.5F;
     float ambientOcclusion_ = 1.0F;

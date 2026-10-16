@@ -105,6 +105,7 @@ uniform int u_PcfSamples;
 uniform int u_ShadowResolution;
 uniform float u_ShadowFar;
 uniform bool u_CascadeDebug;
+uniform int u_LightingDebugView;
 uniform bool u_ShadowEnabled;
 uniform bool u_UseTexture;
 uniform bool u_EncodeSrgb;
@@ -170,8 +171,10 @@ vec3 fresnelSchlick(float cosine,vec3 f0){
 float sampleCascadeShadow(int cascade, vec3 worldPosition, vec3 normal, vec3 lightDir){
     vec3 offsetPosition=worldPosition+normal*u_NormalOffsetBias;
     vec4 lightClip=u_LightSpaceMatrices[cascade]*vec4(offsetPosition,1.0);
+    if(abs(lightClip.w)<0.000001 || any(isnan(lightClip)) || any(isinf(lightClip))) return 0.0;
     vec3 projected=lightClip.xyz/lightClip.w*0.5+0.5;
-    if(projected.z>1.0 || projected.x<0.0 || projected.x>1.0 || projected.y<0.0 || projected.y>1.0) return 0.0;
+    if(any(isnan(projected)) || any(isinf(projected)) || projected.z<0.0 || projected.z>1.0 ||
+        projected.x<0.0 || projected.x>1.0 || projected.y<0.0 || projected.y>1.0) return 0.0;
     float bias=max(u_ShadowBias*(1.0-max(dot(normal,lightDir),0.0)),u_ShadowBias*0.12);
     int rotationIndex=(int(gl_FragCoord.x)+int(gl_FragCoord.y))&3;
     vec2 atlasOrigin=vec2(float(cascade%2),float(cascade/2))*0.5;
@@ -218,6 +221,7 @@ void main(){
     vec4 baseSample=u_UseTexture?texture(u_Texture,vTexCoord):vec4(u_BaseColor,1.0);
     vec3 baseColor=baseSample.rgb*u_BaseColorFactor*vColor.rgb;
     vec3 normal=normalize(vNormal);
+    if(any(isnan(normal)) || any(isinf(normal)) || dot(normal,normal)<0.000001) normal=vec3(0.0,1.0,0.0);
     vec3 lightDir=normalize(-u_LightDirection);
     vec3 viewDir=normalize(u_ViewPosition-vFragPos);
     vec3 halfwayDir=normalize(lightDir+viewDir);
@@ -240,7 +244,7 @@ void main(){
     vec3 ambientDiffuseLight=mix(groundBounce,skyLight,hemi);
     vec3 environmentDiffuse=ambientDiffuseLight*baseColor*kD;
     vec3 environmentSpecular=texture(u_EnvironmentMap,reflect(-viewDir,normal)).rgb*fresnel*(1.0-roughness);
-    vec3 ambient=(environmentDiffuse+environmentSpecular)*u_AmbientStrength*u_AO;
+    vec3 ambient=max((environmentDiffuse+environmentSpecular)*max(u_AmbientStrength,0.0)*clamp(u_AO,0.0,1.0),vec3(0.0));
     if(u_HemisphereEnabled) ambient=max(ambient,baseColor*0.12);
     float shadow=calculateShadow(normal,lightDir);
     vec3 direct=(diffuse+specular)*srgbToLinear(u_LightColor)*u_DiffuseStrength*nDotL;
@@ -256,10 +260,25 @@ void main(){
     }
     float dist=length(u_ViewPosition-vFragPos);
     float heightDensity=exp(-max(vFragPos.y,0.0)*0.045);
-    float fogAmount=1.0-exp(-pow(max(u_FogDensity,0.0)*dist*heightDensity,2.0));
+    float fogAmount=1.0-exp(-pow(max(u_FogDensity,0.0)*max(dist,0.0)*heightDensity,2.0));
     float fogFactor=u_FogEnabled?clamp(fogAmount*smoothstep(12.0,38.0,dist),0.0,0.82):0.0;
-    vec3 fogColor=evaluateSkyColor(normalize(vFragPos-u_ViewPosition));
-    vec3 finalColor=mix(litColor,fogColor,fogFactor)+u_EmissiveFactor;
+    vec3 fogDirection=vFragPos-u_ViewPosition;
+    vec3 fogColor=evaluateSkyColor(dot(fogDirection,fogDirection)>0.000001?normalize(fogDirection):vec3(0.0,1.0,0.0));
+    vec3 directColor=max((1.0-shadow)*direct,vec3(0.0));
+    vec3 finalColor=mix(litColor,fogColor,fogFactor)+max(u_EmissiveFactor,vec3(0.0));
+    bool invalidValue=any(isnan(baseColor))||any(isinf(baseColor)||lessThan(baseColor,vec3(0.0)))||
+        any(isnan(normal))||any(isinf(normal))||any(isnan(ambient))||any(isinf(ambient))||
+        any(isnan(directColor))||any(isinf(directColor))||any(isnan(finalColor))||any(isinf(finalColor))||
+        any(lessThan(finalColor,vec3(0.0)))||isnan(fogFactor)||isinf(fogFactor)||isnan(shadow)||isinf(shadow);
+    if(u_LightingDebugView==1) finalColor=max(baseColor,vec3(0.0));
+    else if(u_LightingDebugView==2) finalColor=normal*0.5+0.5;
+    else if(u_LightingDebugView==3) finalColor=max(ambient,vec3(0.0));
+    else if(u_LightingDebugView==4) finalColor=directColor;
+    else if(u_LightingDebugView==5) finalColor=vec3(1.0-clamp(shadow,0.0,1.0));
+    else if(u_LightingDebugView==6) finalColor=vec3(clamp(fogFactor,0.0,1.0));
+    else if(u_LightingDebugView==7) finalColor=vec3(clamp(length(vFragPos-u_ViewPosition)/max(u_ShadowFar,1.0),0.0,1.0));
+    else if(u_LightingDebugView==8 && invalidValue) finalColor=vec3(1.0,0.0,1.0);
+    if(invalidValue && u_LightingDebugView==8) finalColor=vec3(1.0,0.0,1.0);
     if(u_EncodeSrgb) finalColor=linearToSrgb(finalColor);
     fragmentColor=vec4(finalColor,baseSample.a);
 }
@@ -423,6 +442,7 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
     gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_HemisphereEnabled"), hemisphereEnabled_ ? GL_TRUE : GL_FALSE);
     gl_.uniform1f(gl_.getUniformLocation(shader_.program(), "u_FogDensity"), fogDensity_);
     gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_SkyPreset"), skyPreset_);
+    gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_LightingDebugView"), lightingDebugView_);
     shader_.setEmissiveFactor({0.0F, 0.0F, 0.0F});
     pipeline.beginPass(GpuPass::Scene);
     if (arenaFloorTexture_) {

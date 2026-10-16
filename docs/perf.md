@@ -41,6 +41,22 @@ Pass measurements use `GL_TIME_ELAPSED`; total GPU frame uses asynchronous `GL_T
 
 These historical measurements precede A3c and are superseded by the shared-atlas timings below. At that point, actor-owned depth draws were included in particle/overlay and cascades were not yet connected.
 
+## Graphics Incident 1 Diagnostic Smoke
+
+RTX 3050 Ti Laptop GPU, 1920x1080, HDR on, 240-frame GPU query average after adding shader diagnostic selection and finite guards:
+
+| Pass | Time (ms) |
+|---|---:|
+| Shadow cascades 0/1/2/3 | 0.112 / 0.144 / 0.135 / 0.054 |
+| Boss/remote shadow | 0.008 |
+| Scene | 0.903 |
+| Sky | 0.011 |
+| Particle/overlay | 0.001 |
+| Tonemap | 0.052 |
+| Total GPU frame | 1.490 |
+
+This is a smoke measurement, not a before/after visual diagnosis. No screenshot capture was available in the automated run.
+
 ## A3c Shared CSM High Smoke
 
 - Date: 2026-10-16
