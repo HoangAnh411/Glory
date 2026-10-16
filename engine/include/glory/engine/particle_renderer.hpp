@@ -15,7 +15,7 @@ public:
     ParticleRenderer(const ParticleRenderer&) = delete;
     ParticleRenderer& operator=(const ParticleRenderer&) = delete;
     void draw(const ParticleSystem& particles, const glm::mat4& viewProjection,
-        const glm::vec3& cameraRight, const glm::vec3& cameraUp) const;
+        const glm::vec3& cameraRight, const glm::vec3& cameraUp, bool encodeSrgb) const;
 private:
     GlApi& gl_;
     ShaderProgram shader_;
@@ -23,5 +23,6 @@ private:
     GLuint vertexBuffer_ = 0;
     GLint cameraRightLocation_ = -1;
     GLint cameraUpLocation_ = -1;
+    GLint encodeSrgbLocation_ = -1;
 };
 }

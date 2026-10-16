@@ -242,6 +242,10 @@ int main(int argc, char* argv[]) {
     for (int index = 1; index < argc; ++index) {
         if (std::strcmp(argv[index], "--smoke-test") == 0) {
             config.smokeTestTickLimit = 120;
+        } else if (std::strcmp(argv[index], "--smoke-test-1080p") == 0) {
+            config.windowWidth = 1920;
+            config.windowHeight = 1080;
+            config.smokeTestTickLimit = 120;
         } else if (std::strcmp(argv[index], "--connect") == 0 && index + 1 < argc) {
             const std::string endpoint(argv[++index]);
             const std::size_t separator = endpoint.rfind(':');
@@ -260,7 +264,7 @@ int main(int argc, char* argv[]) {
             connectHost = endpoint.substr(0, separator);
             connectPort = static_cast<std::uint16_t>(parsedPort);
         } else {
-            std::cerr << "Usage: glory_client [--smoke-test] [--connect IPv4:port]\n";
+            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p] [--connect IPv4:port]\n";
             return 2;
         }
     }

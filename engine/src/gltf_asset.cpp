@@ -1,4 +1,5 @@
 #include "glory/engine/gltf_asset.hpp"
+#include "glory/engine/color_space.hpp"
 
 #include <cgltf.h>
 
@@ -169,6 +170,7 @@ GltfAsset loadGltfAsset(const std::filesystem::path& path) {
     const cgltf_accessor* positions = nullptr;
     const cgltf_accessor* normals = nullptr;
     const cgltf_accessor* texcoords = nullptr;
+    const cgltf_accessor* colors = nullptr;
     const cgltf_accessor* joints = nullptr;
     const cgltf_accessor* weights = nullptr;
     for (cgltf_size i = 0; i < primitive.attributes_count; ++i) {
@@ -177,6 +179,7 @@ GltfAsset loadGltfAsset(const std::filesystem::path& path) {
         if (attribute.type == cgltf_attribute_type_position) positions = attribute.data;
         if (attribute.type == cgltf_attribute_type_normal) normals = attribute.data;
         if (attribute.type == cgltf_attribute_type_texcoord) texcoords = attribute.data;
+        if (attribute.type == cgltf_attribute_type_color) colors = attribute.data;
         if (attribute.type == cgltf_attribute_type_joints) joints = attribute.data;
         if (attribute.type == cgltf_attribute_type_weights) weights = attribute.data;
     }
@@ -185,6 +188,8 @@ GltfAsset loadGltfAsset(const std::filesystem::path& path) {
         (texcoords != nullptr && (texcoords->type != cgltf_type_vec2 || texcoords->count != positions->count))) {
         throw std::runtime_error("glTF NORMAL or TEXCOORD_0 accessor does not match POSITION data");
     }
+    if (colors != nullptr && ((colors->type != cgltf_type_vec3 && colors->type != cgltf_type_vec4) ||
+        colors->count != positions->count)) throw std::runtime_error("glTF COLOR_0 accessor must be VEC3/VEC4 and match POSITION data");
     if ((joints == nullptr) != (weights == nullptr) ||
         (joints != nullptr && (joints->type != cgltf_type_vec4 || weights->type != cgltf_type_vec4 || joints->count != positions->count || weights->count != positions->count))) {
         throw std::runtime_error("glTF JOINTS_0 and WEIGHTS_0 must both be VEC4 with POSITION-matching counts");
@@ -197,6 +202,12 @@ GltfAsset loadGltfAsset(const std::filesystem::path& path) {
         if (!cgltf_accessor_read_float(positions, i, vertex.position, 3)) throw std::runtime_error("Invalid POSITION accessor");
         if (normals != nullptr && !cgltf_accessor_read_float(normals, i, vertex.normal, 3)) throw std::runtime_error("Invalid NORMAL accessor");
         if (texcoords != nullptr && !cgltf_accessor_read_float(texcoords, i, vertex.texCoord, 2)) throw std::runtime_error("Invalid TEXCOORD_0 accessor");
+        if (colors != nullptr) {
+            if (!cgltf_accessor_read_float(colors, i, vertex.color, colors->type == cgltf_type_vec4 ? 4 : 3))
+                throw std::runtime_error("Invalid COLOR_0 accessor");
+            for (std::size_t channel = 0; channel < 3; ++channel)
+                vertex.color[channel] = srgbToLinear(vertex.color[channel]);
+        }
     }
 
     const cgltf_skin* skin = nullptr;
@@ -258,6 +269,10 @@ GltfAsset loadGltfAsset(const std::filesystem::path& path) {
         asset.ambientOcclusion = material.occlusion_texture.texture != nullptr
             ? std::clamp(material.occlusion_texture.scale, 0.0F, 1.0F) : 1.0F;
         for (std::size_t channel = 0; channel < 4; ++channel) asset.baseColorFactor[channel] = pbr.base_color_factor[channel];
+        for (std::size_t channel = 0; channel < 3; ++channel) {
+            asset.baseColorFactor[channel] = srgbToLinear(asset.baseColorFactor[channel]);
+            asset.emissiveFactor[channel] = srgbToLinear(material.emissive_factor[channel]);
+        }
     }
     const cgltf_texture* texture = primitive.material != nullptr ? primitive.material->pbr_metallic_roughness.base_color_texture.texture : nullptr;
     if (texture != nullptr && texture->image != nullptr) {

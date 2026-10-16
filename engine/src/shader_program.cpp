@@ -130,6 +130,8 @@ ShaderProgram::ShaderProgram(
         roughnessLocation_ = gl_.getUniformLocation(program_, "u_Roughness");
         aoLocation_ = gl_.getUniformLocation(program_, "u_AO");
         baseColorFactorLocation_ = gl_.getUniformLocation(program_, "u_BaseColorFactor");
+        emissiveFactorLocation_ = gl_.getUniformLocation(program_, "u_EmissiveFactor");
+        encodeSrgbLocation_ = gl_.getUniformLocation(program_, "u_EncodeSrgb");
     } catch (...) {
         gl_.deleteProgram(program_);
         program_ = 0;
@@ -175,6 +177,12 @@ void ShaderProgram::setPbrMaterial(float metallic, float roughness, float ao) co
 
 void ShaderProgram::setBaseColorFactor(const glm::vec3& color) const noexcept {
     if (baseColorFactorLocation_ >= 0) gl_.uniform3f(baseColorFactorLocation_, color.x, color.y, color.z);
+}
+void ShaderProgram::setEmissiveFactor(const glm::vec3& color) const noexcept {
+    if (emissiveFactorLocation_ >= 0) gl_.uniform3f(emissiveFactorLocation_, color.x, color.y, color.z);
+}
+void ShaderProgram::setEncodeSrgb(bool enabled) const noexcept {
+    if (encodeSrgbLocation_ >= 0) gl_.uniform1i(encodeSrgbLocation_, enabled ? 1 : 0);
 }
 
 void ShaderProgram::setLightSpaceMatrix(const glm::mat4& matrix) const noexcept {

@@ -12,6 +12,7 @@ struct GltfVertex {
     float position[3]{};
     float normal[3]{};
     float texCoord[2]{};
+    float color[4]{1.0F, 1.0F, 1.0F, 1.0F};
     std::uint32_t joints[4]{};
     float weights[4]{1.0F, 0.0F, 0.0F, 0.0F};
 };
@@ -26,6 +27,7 @@ struct GltfAsset {
     float roughnessFactor = 1.0F;
     float ambientOcclusion = 1.0F;
     float baseColorFactor[4]{1.0F, 1.0F, 1.0F, 1.0F};
+    float emissiveFactor[3]{};
     bool hasSkin = false;
     Skeleton skeleton;
     std::vector<AnimationClip> animations;

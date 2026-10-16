@@ -1,13 +1,18 @@
 #include "glory/engine/gltf_asset.hpp"
 #include "glory/engine/image_loader.hpp"
+#include "glory/engine/color_space.hpp"
 
 #include <filesystem>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 
 int main() {
     const std::filesystem::path root = GLORY_ASSET_DIR;
     try {
+        if (std::abs(glory::engine::srgbToLinear(0.5F) - 0.21404114F) > 1.0e-5F ||
+            std::abs(glory::engine::srgbToLinear(0.04045F) - 0.0031308F) > 1.0e-5F)
+            throw std::runtime_error("sRGB-to-linear transfer function is incorrect");
         const auto image = glory::engine::loadImage(root / "textures" / "starter_crate.png");
         if (image.width != 8 || image.height != 8 || image.rgba.size() != 8U * 8U * 4U) throw std::runtime_error("sample PNG dimensions or decoded bytes are incorrect");
         const auto asset = glory::engine::loadGltfAsset(root / "models" / "starter_crate.gltf");

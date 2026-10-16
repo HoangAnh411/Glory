@@ -3,6 +3,7 @@
 #include "glory/engine/directional_light.hpp"
 #include "glory/engine/animation.hpp"
 #include "glory/engine/application.hpp"
+#include "glory/engine/render_pipeline.hpp"
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
@@ -53,7 +54,7 @@ public:
     [[nodiscard]] bool isFeedbackOpen() const noexcept { return feedbackOpenRequested_; }
     void beginFrame(float frameSeconds, std::uint64_t fixedTicks, const glm::vec3& cameraPosition,
         float cameraYaw, float cameraPitch, bool& thirdPersonMode, bool& enhancedCamera,
-        const PlayerFrameState& player,
+        RenderPipeline& renderPipeline, const PlayerFrameState& player,
         bool& resetBossRequested, std::string& requestedSkillId,
         std::string& statusCommand,
         std::vector<SkillEditorSkill>& editorSkills,
@@ -105,6 +106,7 @@ private:
     std::string worldEditorMessage_;
     float averageFps_ = 0.0F;
     bool feedbackOpenRequested_ = false;
+    bool arenaBoundaryDebugEnabled_ = false;
 };
 
 } // namespace glory::engine

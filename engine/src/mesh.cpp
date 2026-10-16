@@ -17,6 +17,7 @@ Mesh::Mesh(GlApi& gl, const GltfAsset& asset) : gl_(gl), indexCount_(static_cast
     gl_.enableVertexAttribArray(2); gl_.vertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(GltfVertex), reinterpret_cast<void*>(offsetof(GltfVertex, texCoord)));
     gl_.enableVertexAttribArray(3); gl_.vertexAttribIPointer(3, 4, GL_UNSIGNED_INT, sizeof(GltfVertex), reinterpret_cast<void*>(offsetof(GltfVertex, joints)));
     gl_.enableVertexAttribArray(4); gl_.vertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(GltfVertex), reinterpret_cast<void*>(offsetof(GltfVertex, weights)));
+    gl_.enableVertexAttribArray(5); gl_.vertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(GltfVertex), reinterpret_cast<void*>(offsetof(GltfVertex, color)));
     gl_.bindVertexArray(0);
 }
 Mesh::~Mesh() { if (ebo_) gl_.deleteBuffers(1, &ebo_); if (vbo_) gl_.deleteBuffers(1, &vbo_); if (vao_) gl_.deleteVertexArrays(1, &vao_); }

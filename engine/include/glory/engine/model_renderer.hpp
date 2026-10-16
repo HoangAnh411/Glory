@@ -9,6 +9,7 @@
 #include "glory/engine/particle_renderer.hpp"
 #include "glory/engine/particle_system.hpp"
 #include "glory/engine/texture2d.hpp"
+#include "glory/engine/render_pipeline.hpp"
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -27,10 +28,11 @@ struct StaticWorldProp {
 class ModelRenderer {
 public:
     explicit ModelRenderer(const std::filesystem::path& modelPath);
-    void render(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPosition, const DirectionalLight& light, int width, int height) const;
+    void render(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPosition,
+        const DirectionalLight& light, int width, int height, RenderPipeline& pipeline) const;
     void renderOverlay(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPosition,
         const DirectionalLight& light, const glm::vec3& position, float yawDegrees, float scale,
-        const glm::vec3& tint = glm::vec3(1.0F)) const;
+        const glm::vec3& tint, bool encodeSrgb) const;
     void updateAnimation(float deltaSeconds);
     void setTransform(const glm::vec3& position, float yawDegrees) noexcept;
     [[nodiscard]] float cameraObstructionDistance(const glm::vec3& origin,

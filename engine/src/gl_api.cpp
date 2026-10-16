@@ -74,6 +74,16 @@ GlApi::GlApi() {
     blendFunc = loadProcedure<GloryGlBlendFuncProc>("glBlendFunc");
     depthMask = loadProcedure<GloryGlDepthMaskProc>("glDepthMask");
     disable = loadProcedure<GloryGlEnableProc>("glDisable");
+    genQueries = reinterpret_cast<GloryGlGenQueriesProc>(SDL_GL_GetProcAddress("glGenQueries"));
+    deleteQueries = reinterpret_cast<GloryGlDeleteQueriesProc>(SDL_GL_GetProcAddress("glDeleteQueries"));
+    beginQuery = reinterpret_cast<GloryGlBeginQueryProc>(SDL_GL_GetProcAddress("glBeginQuery"));
+    endQuery = reinterpret_cast<GloryGlEndQueryProc>(SDL_GL_GetProcAddress("glEndQuery"));
+    queryCounter = reinterpret_cast<GloryGlQueryCounterProc>(SDL_GL_GetProcAddress("glQueryCounter"));
+    getQueryObjectiv = reinterpret_cast<GloryGlGetQueryObjectivProc>(SDL_GL_GetProcAddress("glGetQueryObjectiv"));
+    getQueryObjectui64v = reinterpret_cast<GloryGlGetQueryObjectui64vProc>(SDL_GL_GetProcAddress("glGetQueryObjectui64v"));
+    timerQueriesAvailable = genQueries && deleteQueries && beginQuery && endQuery &&
+        queryCounter && getQueryObjectiv && getQueryObjectui64v;
+    getString = loadProcedure<GloryGlGetStringProc>("glGetString");
 }
 
 } // namespace glory::engine

@@ -27,6 +27,8 @@ public:
     void setEnvironmentMapUnit(int unit) const noexcept;
     void setPbrMaterial(float metallic, float roughness, float ao) const noexcept;
     void setBaseColorFactor(const glm::vec3& color) const noexcept;
+    void setEmissiveFactor(const glm::vec3& color) const noexcept;
+    void setEncodeSrgb(bool enabled) const noexcept;
     void setLightSpaceMatrix(const glm::mat4& matrix) const noexcept;
     void setShadowSettings(bool enabled, float bias) const noexcept;
     void setBaseColor(const glm::vec3& color) const noexcept;
@@ -61,6 +63,8 @@ private:
     GLint roughnessLocation_ = -1;
     GLint aoLocation_ = -1;
     GLint baseColorFactorLocation_ = -1;
+    GLint emissiveFactorLocation_ = -1;
+    GLint encodeSrgbLocation_ = -1;
 };
 
 } // namespace glory::engine

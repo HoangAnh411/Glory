@@ -4,7 +4,7 @@
 namespace glory::engine {
 class Texture2D {
 public:
-    Texture2D(GlApi& gl, const ImageData& image);
+    Texture2D(GlApi& gl, const ImageData& image, bool srgbColor = true);
     ~Texture2D();
     Texture2D(const Texture2D&) = delete;
     Texture2D& operator=(const Texture2D&) = delete;

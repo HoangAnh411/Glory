@@ -23,8 +23,18 @@ void main(){
 constexpr std::string_view skyboxFragmentSource = R"glsl(#version 450 core
 in vec3 vDirection;
 uniform samplerCube u_EnvironmentMap;
+uniform bool u_EncodeSrgb;
 out vec4 fragmentColor;
-void main(){ fragmentColor=vec4(texture(u_EnvironmentMap,normalize(vDirection)).rgb,1.0); }
+vec3 linearToSrgb(vec3 value){
+    vec3 low=value*12.92;
+    vec3 high=1.055*pow(max(value,vec3(0.0)),vec3(1.0/2.4))-0.055;
+    return mix(high,low,lessThanEqual(value,vec3(0.0031308)));
+}
+void main(){
+    vec3 color=texture(u_EnvironmentMap,normalize(vDirection)).rgb;
+    if(u_EncodeSrgb) color=linearToSrgb(color);
+    fragmentColor=vec4(color,1.0);
+}
 )glsl";
 constexpr std::array<float, 108> cubeVertices{{
     -1,-1,-1, 1,-1,-1, 1,1,-1, 1,1,-1, -1,1,-1, -1,-1,-1,
@@ -87,7 +97,7 @@ Skybox::Skybox(GlApi& gl) : gl_(gl), shader_(gl_, skyboxVertexSource, skyboxFrag
                     for (std::size_t channel = 0; channel < 4; ++channel) pixels[index + channel] = color[channel];
                 }
             }
-            gl_.texImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_RGBA8, resolution, resolution,
+            gl_.texImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_SRGB8_ALPHA8, resolution, resolution,
                 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
         }
         gl_.genVertexArrays(1, &vertexArray_);
@@ -101,7 +111,8 @@ Skybox::Skybox(GlApi& gl) : gl_(gl), shader_(gl_, skyboxVertexSource, skyboxFrag
         gl_.bindVertexArray(0);
         shader_.use();
         cubemapLocation_ = gl_.getUniformLocation(shader_.program(), "u_EnvironmentMap");
-        if (cubemapLocation_ < 0) throw std::runtime_error("Skybox environment sampler was not found");
+        encodeSrgbLocation_ = gl_.getUniformLocation(shader_.program(), "u_EncodeSrgb");
+        if (cubemapLocation_ < 0 || encodeSrgbLocation_ < 0) throw std::runtime_error("Skybox uniforms were not found");
         gl_.uniform1i(cubemapLocation_, 2);
     } catch (...) {
         if (vertexBuffer_ != 0) gl_.deleteBuffers(1, &vertexBuffer_);
@@ -118,10 +129,11 @@ Skybox::~Skybox() {
     if (cubemap_ != 0) gl_.deleteTextures(1, &cubemap_);
 }
 
-void Skybox::draw(const glm::mat4& view, const glm::mat4& projection) const noexcept {
+void Skybox::draw(const glm::mat4& view, const glm::mat4& projection, bool encodeSrgb) const noexcept {
     const glm::mat4 viewNoTranslation{glm::mat3(view)};
     shader_.use();
     shader_.setViewProjection(projection * viewNoTranslation);
+    gl_.uniform1i(encodeSrgbLocation_, encodeSrgb ? 1 : 0);
     gl_.activeTexture(GL_TEXTURE2);
     gl_.bindTexture(GL_TEXTURE_CUBE_MAP, cubemap_);
     gl_.depthFunc(GL_LEQUAL);

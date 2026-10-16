@@ -23,8 +23,23 @@ void main(){
 )glsl";
 constexpr std::string_view particleFragmentSource = R"glsl(#version 450 core
 in vec4 vColor;
+uniform bool u_EncodeSrgb;
 out vec4 fragmentColor;
-void main(){ fragmentColor=vColor; }
+vec3 srgbToLinear(vec3 value){
+    vec3 low=value/12.92;
+    vec3 high=pow((value+0.055)/1.055,vec3(2.4));
+    return mix(high,low,lessThanEqual(value,vec3(0.04045)));
+}
+vec3 linearToSrgb(vec3 value){
+    vec3 low=value*12.92;
+    vec3 high=1.055*pow(max(value,vec3(0.0)),vec3(1.0/2.4))-0.055;
+    return mix(high,low,lessThanEqual(value,vec3(0.0031308)));
+}
+void main(){
+    vec3 color=srgbToLinear(vColor.rgb);
+    if(u_EncodeSrgb) color=linearToSrgb(color);
+    fragmentColor=vec4(color,vColor.a);
+}
 )glsl";
 struct ParticleVertex { float center[3]; float color[4]; float corner[2]; };
 constexpr std::array<std::array<float, 2>, 6> corners{{
@@ -56,6 +71,7 @@ ParticleRenderer::ParticleRenderer(GlApi& gl)
     gl_.bindVertexArray(0);
     cameraRightLocation_ = gl_.getUniformLocation(shader_.program(), "u_CameraRight");
     cameraUpLocation_ = gl_.getUniformLocation(shader_.program(), "u_CameraUp");
+    encodeSrgbLocation_ = gl_.getUniformLocation(shader_.program(), "u_EncodeSrgb");
 }
 
 ParticleRenderer::~ParticleRenderer() {
@@ -64,7 +80,7 @@ ParticleRenderer::~ParticleRenderer() {
 }
 
 void ParticleRenderer::draw(const ParticleSystem& particles, const glm::mat4& viewProjection,
-    const glm::vec3& cameraRight, const glm::vec3& cameraUp) const {
+    const glm::vec3& cameraRight, const glm::vec3& cameraUp, bool encodeSrgb) const {
     const auto& active = particles.particles();
     if (active.empty()) return;
     std::vector<ParticleVertex> vertices;
@@ -83,6 +99,7 @@ void ParticleRenderer::draw(const ParticleSystem& particles, const glm::mat4& vi
     shader_.setViewProjection(viewProjection);
     gl_.uniform3f(cameraRightLocation_, cameraRight.x, cameraRight.y, cameraRight.z);
     gl_.uniform3f(cameraUpLocation_, cameraUp.x, cameraUp.y, cameraUp.z);
+    gl_.uniform1i(encodeSrgbLocation_, encodeSrgb ? 1 : 0);
     gl_.bindVertexArray(vertexArray_);
     gl_.bindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
     gl_.bufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices.size() * sizeof(ParticleVertex)), vertices.data(), GL_STREAM_DRAW);

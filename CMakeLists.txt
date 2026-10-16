@@ -165,6 +165,7 @@ add_library(glory_engine
     engine/src/mesh.cpp
     engine/src/model.cpp
     engine/src/model_renderer.cpp
+    engine/src/render_pipeline.cpp
     engine/src/miniaudio_impl.cpp
     engine/src/particle_renderer.cpp
     engine/src/particle_system.cpp

@@ -32,6 +32,7 @@ public:
     [[nodiscard]] std::vector<glm::mat4> skinPalette() const;
     [[nodiscard]] bool hasSkin() const noexcept;
     [[nodiscard]] glm::vec3 baseColorFactor() const noexcept;
+    [[nodiscard]] glm::vec3 emissiveFactor() const noexcept;
     [[nodiscard]] float metallicFactor() const noexcept;
     [[nodiscard]] float roughnessFactor() const noexcept;
     [[nodiscard]] float ambientOcclusion() const noexcept;

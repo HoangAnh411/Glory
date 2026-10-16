@@ -64,6 +64,7 @@ std::vector<glm::mat4> Model::skinPalette() const {
 }
 bool Model::hasSkin() const noexcept { return asset_.hasSkin; }
 glm::vec3 Model::baseColorFactor() const noexcept { return {asset_.baseColorFactor[0], asset_.baseColorFactor[1], asset_.baseColorFactor[2]}; }
+glm::vec3 Model::emissiveFactor() const noexcept { return {asset_.emissiveFactor[0], asset_.emissiveFactor[1], asset_.emissiveFactor[2]}; }
 float Model::metallicFactor() const noexcept { return asset_.metallicFactor; }
 float Model::roughnessFactor() const noexcept { return asset_.roughnessFactor; }
 float Model::ambientOcclusion() const noexcept { return asset_.ambientOcclusion; }

@@ -30,6 +30,14 @@ typedef void (APIENTRYP GloryGlTexParameterfvProc)(GLenum target, GLenum name, c
 typedef void (APIENTRYP GloryGlDepthFuncProc)(GLenum function);
 typedef void (APIENTRYP GloryGlBlendFuncProc)(GLenum source, GLenum destination);
 typedef void (APIENTRYP GloryGlDepthMaskProc)(GLboolean enabled);
+typedef void (APIENTRYP GloryGlGenQueriesProc)(GLsizei count, GLuint* queries);
+typedef void (APIENTRYP GloryGlDeleteQueriesProc)(GLsizei count, const GLuint* queries);
+typedef void (APIENTRYP GloryGlBeginQueryProc)(GLenum target, GLuint query);
+typedef void (APIENTRYP GloryGlEndQueryProc)(GLenum target);
+typedef void (APIENTRYP GloryGlQueryCounterProc)(GLuint query, GLenum target);
+typedef void (APIENTRYP GloryGlGetQueryObjectivProc)(GLuint query, GLenum name, GLint* value);
+typedef void (APIENTRYP GloryGlGetQueryObjectui64vProc)(GLuint query, GLenum name, GLuint64* value);
+typedef const GLubyte* (APIENTRYP GloryGlGetStringProc)(GLenum name);
 
 namespace glory::engine {
 
@@ -90,6 +98,15 @@ public:
     GloryGlBlendFuncProc blendFunc = nullptr;
     GloryGlDepthMaskProc depthMask = nullptr;
     GloryGlEnableProc disable = nullptr;
+    GloryGlGenQueriesProc genQueries = nullptr;
+    GloryGlDeleteQueriesProc deleteQueries = nullptr;
+    GloryGlBeginQueryProc beginQuery = nullptr;
+    GloryGlEndQueryProc endQuery = nullptr;
+    GloryGlQueryCounterProc queryCounter = nullptr;
+    GloryGlGetQueryObjectivProc getQueryObjectiv = nullptr;
+    GloryGlGetQueryObjectui64vProc getQueryObjectui64v = nullptr;
+    GloryGlGetStringProc getString = nullptr;
+    bool timerQueriesAvailable = false;
 };
 
 } // namespace glory::engine

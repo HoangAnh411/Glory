@@ -12,7 +12,9 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
+#include <iomanip>
 #include <iostream>
 #include <exception>
 #include <memory>
@@ -156,6 +158,17 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     int result = 0;
     try {
         DebugPanel debugPanel(window, context);
+        RenderPipeline renderPipeline;
+        if (config.smokeTestTickLimit != 0) {
+            int smokeWidth = 0;
+            int smokeHeight = 0;
+            SDL_GetWindowSizeInPixels(window, &smokeWidth, &smokeHeight);
+            renderPipeline.beginFrame(smokeWidth, smokeHeight);
+            renderPipeline.beginFrame(std::max(1, smokeWidth / 2), std::max(1, smokeHeight / 2));
+            renderPipeline.beginFrame(smokeWidth, smokeHeight);
+            if (!renderPipeline.framebufferComplete() || renderPipeline.resizeCount() < 2)
+                throw std::runtime_error("HDR framebuffer smoke resize check failed");
+        }
         ModelRenderer renderer(config.modelPath);
         ModelRenderer bossRenderer(config.bossModelPath);
         struct RemoteRenderer {
@@ -311,7 +324,8 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             renderer.setTransform(player.position, player.facingYaw);
             if (!animationFrozenThisFrame) renderer.updateAnimation(static_cast<float>(frameSeconds));
             debugPanel.beginFrame(static_cast<float>(frameSeconds), completedTicks, cameraPosition,
-                cameraYaw, cameraPitch, thirdPersonMode, enhancedCamera, player, resetBossRequested,
+                cameraYaw, cameraPitch, thirdPersonMode, enhancedCamera, renderPipeline,
+                player, resetBossRequested,
                 requestedSkillId,
                 statusCommand,
                 editorSkills, config.saveSkills, config.reloadSkills,
@@ -324,8 +338,10 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 config.marketPanel, config.marketAction,
                 config.feedbackPanel, config.feedbackSubmit,
                 light, renderer, audio);
-            renderer.render(view, projection, cameraPosition, light, drawableWidth, drawableHeight);
+            renderPipeline.beginFrame(drawableWidth, drawableHeight);
+            renderer.render(view, projection, cameraPosition, light, drawableWidth, drawableHeight, renderPipeline);
             std::unordered_set<std::uint32_t> visibleRemoteIds;
+            renderPipeline.beginPass(GpuPass::ParticleOverlay);
             for (const auto& remote : player.remotePlayers) {
                 visibleRemoteIds.insert(remote.clientId);
                 auto [entry, inserted] = remoteRenderers.try_emplace(remote.clientId);
@@ -343,16 +359,40 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 const glm::vec3 tint = colorIndex == 0 ? glm::vec3(0.45F, 0.72F, 1.0F) :
                     (colorIndex == 1 ? glm::vec3(1.0F, 0.55F, 0.38F) : glm::vec3(0.55F, 1.0F, 0.62F));
                 remoteModel.renderOverlay(view, projection, cameraPosition, light,
-                    remote.position, remote.yaw, 1.0F, tint);
+                    remote.position, remote.yaw, 1.0F, tint, !renderPipeline.hdrEnabled());
             }
             std::erase_if(remoteRenderers, [&visibleRemoteIds](const auto& entry) {
                 return !visibleRemoteIds.contains(entry.first);
             });
             if (!player.bossDefeated)
                 bossRenderer.renderOverlay(view, projection, cameraPosition, light,
-                    player.bossPosition, player.bossYaw, 1.8F, glm::vec3(1.15F, 0.45F, 0.45F));
+                    player.bossPosition, player.bossYaw, 1.8F, glm::vec3(1.15F, 0.45F, 0.45F),
+                    !renderPipeline.hdrEnabled());
+            renderPipeline.endPass();
+            renderPipeline.finishFrame();
             debugPanel.render();
             SDL_GL_SwapWindow(window);
+        }
+        if (config.smokeTestTickLimit != 0) {
+            std::cout << "OpenGL renderer: " << renderPipeline.rendererInfo() << '\n';
+            int smokeWidth = 0;
+            int smokeHeight = 0;
+            SDL_GetWindowSizeInPixels(window, &smokeWidth, &smokeHeight);
+            std::cout << "Smoke drawable resolution: " << smokeWidth << 'x' << smokeHeight << '\n';
+            std::cout << "HDR framebuffer complete; resize recreations: " << renderPipeline.resizeCount() << '\n';
+            if (renderPipeline.timerQueriesAvailable() && !renderPipeline.history().empty()) {
+                std::array<double, static_cast<std::size_t>(GpuPass::Count)> totals{};
+                for (const GpuTimingSample& sample : renderPipeline.history())
+                    for (std::size_t pass = 0; pass < totals.size(); ++pass) totals[pass] += sample.milliseconds[pass];
+                std::cout << std::fixed << std::setprecision(3)
+                          << "GPU pass averages (ms, " << renderPipeline.history().size() << " frames):";
+                constexpr const char* names[] = {"shadow", "scene", "sky", "particle_overlay", "tonemap", "gpu_frame"};
+                for (std::size_t pass = 0; pass < totals.size(); ++pass)
+                    std::cout << ' ' << names[pass] << '=' << totals[pass] / renderPipeline.history().size();
+                std::cout << '\n';
+            } else {
+                std::cout << renderPipeline.timerStatus() << '\n';
+            }
         }
     } catch (const std::exception& error) {
         std::cerr << "OpenGL renderer failed: " << error.what() << '\n';

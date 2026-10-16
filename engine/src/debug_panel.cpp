@@ -15,6 +15,7 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cfloat>
 #include <stdexcept>
 #include <string_view>
 
@@ -121,21 +122,20 @@ void DebugPanel::renderGameHud(const PlayerFrameState& player, std::string& requ
     // 0. Ground Overlays (Arena Boundary & Boss Danger Telegraph)
     ImDrawList* bgDraw = ImGui::GetBackgroundDrawList();
     if (bgDraw) {
-        // Arena Perimeter Ring (Radius 35m)
-        constexpr int arenaSegments = 32;
-        const float arenaRadius = 35.0F;
-        ImVec2 arenaPoints[arenaSegments];
-        int validArena = 0;
-        for (int i = 0; i < arenaSegments; ++i) {
-            const float angle = (static_cast<float>(i) / static_cast<float>(arenaSegments)) * 6.2831853F;
-            const glm::vec3 worldPt = glm::vec3(std::cos(angle) * arenaRadius, 0.02F, std::sin(angle) * arenaRadius);
-            ImVec2 screenPt;
-            if (worldToScreen(worldPt, screenPt)) {
-                arenaPoints[validArena++] = screenPt;
+        if (arenaBoundaryDebugEnabled_) {
+            // Optional arena boundary guide; it is an ImGui overlay, not scene geometry.
+            constexpr int arenaSegments = 32;
+            const float arenaRadius = 35.0F;
+            ImVec2 arenaPoints[arenaSegments];
+            int validArena = 0;
+            for (int i = 0; i < arenaSegments; ++i) {
+                const float angle = (static_cast<float>(i) / static_cast<float>(arenaSegments)) * 6.2831853F;
+                const glm::vec3 worldPt = glm::vec3(std::cos(angle) * arenaRadius, 0.02F, std::sin(angle) * arenaRadius);
+                ImVec2 screenPt;
+                if (worldToScreen(worldPt, screenPt)) arenaPoints[validArena++] = screenPt;
             }
-        }
-        if (validArena >= 8) {
-            bgDraw->AddPolyline(arenaPoints, validArena, IM_COL32(70, 140, 220, 100), ImDrawFlags_Closed, 2.0F);
+            if (validArena >= 8)
+                bgDraw->AddPolyline(arenaPoints, validArena, IM_COL32(70, 140, 220, 100), ImDrawFlags_Closed, 2.0F);
         }
 
         // Boss Danger Telegraph Area (Radius 4.8m)
@@ -441,7 +441,7 @@ void DebugPanel::renderGameHud(const PlayerFrameState& player, std::string& requ
 
 void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
     const glm::vec3& cameraPosition, float cameraYaw, float cameraPitch, bool& thirdPersonMode,
-    bool& enhancedCamera,
+    bool& enhancedCamera, RenderPipeline& renderPipeline,
     const PlayerFrameState& player, bool& resetBossRequested,
     std::string& requestedSkillId,
     std::string& statusCommand, std::vector<SkillEditorSkill>& editorSkills,
@@ -593,6 +593,35 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     ImGui::Checkbox("Enhanced Shoulder Camera (compare old)", &enhancedCamera);
                     ImGui::Text("Position: %.2f, %.2f, %.2f | Yaw: %.1f | Pitch: %.1f",
                         cameraPosition.x, cameraPosition.y, cameraPosition.z, cameraYaw, cameraPitch);
+                    ImGui::SeparatorText("HDR / Linear Color / GPU Timing");
+                    bool hdrEnabled = renderPipeline.hdrEnabled();
+                    if (ImGui::Checkbox("HDR + Linear + Tonemap", &hdrEnabled)) renderPipeline.setHdrEnabled(hdrEnabled);
+                    float exposure = renderPipeline.exposure();
+                    if (ImGui::SliderFloat("Exposure", &exposure, 0.1F, 4.0F, "%.2f")) renderPipeline.setExposure(exposure);
+                    ImGui::Text("Pipeline: %s | Exposure: %.2f", hdrEnabled ? "RGBA16F + ACES" : "Legacy direct", renderPipeline.exposure());
+                    ImGui::Checkbox("Arena boundary debug line", &arenaBoundaryDebugEnabled_);
+                    ImGui::TextDisabled("sRGB output is encoded once in the final shader pass.");
+                    ImGui::Text("GPU timing: %s", renderPipeline.timerStatus().c_str());
+                    ImGui::TextWrapped("Renderer: %s", renderPipeline.rendererInfo().c_str());
+                    if (!renderPipeline.history().empty()) {
+                        constexpr const char* passNames[] = {"Shadow", "Scene", "Sky", "Particle/overlay", "Tonemap", "GPU frame"};
+                        const GpuTimingSample& latest = renderPipeline.history().back();
+                        for (std::size_t index = 0; index < latest.milliseconds.size(); ++index)
+                            ImGui::Text("%s: %.3f ms", passNames[index], latest.milliseconds[index]);
+                        std::vector<float> frameHistory;
+                        frameHistory.reserve(renderPipeline.history().size());
+                        float maxGpuFrameMs = 1.0F;
+                        for (const GpuTimingSample& sample : renderPipeline.history())
+                        {
+                            const float frameMs = static_cast<float>(sample.milliseconds[static_cast<std::size_t>(GpuPass::Total)]);
+                            frameHistory.push_back(frameMs);
+                            maxGpuFrameMs = std::max(maxGpuFrameMs, frameMs);
+                        }
+                        ImGui::PlotLines("GPU frame history (ms)", frameHistory.data(),
+                            static_cast<int>(frameHistory.size()), 0, nullptr, 0.0F, maxGpuFrameMs * 1.1F, ImVec2(0.0F, 60.0F));
+                    } else if (renderPipeline.timerQueriesAvailable()) {
+                        ImGui::TextDisabled("Waiting for asynchronous GPU query results...");
+                    }
 
                     ImGui::SeparatorText("Player Telemetry");
                     ImGui::Text("Position: %.2f, %.2f, %.2f | Velocity: %.2f, %.2f, %.2f",
