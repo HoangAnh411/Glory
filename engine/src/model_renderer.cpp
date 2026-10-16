@@ -4,9 +4,11 @@
 #include "glory/engine/pbr_math.hpp"
 #include "glory/engine/image_loader.hpp"
 #include "glory/engine/color_space.hpp"
+#include "glory/engine/render_pipeline.hpp"
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -48,15 +50,15 @@ layout(location=3) in uvec4 aJoints;
 layout(location=4) in vec4 aWeights;
 layout(location=5) in vec4 aColor;
 uniform mat4 u_ViewProjection;
+uniform mat4 u_ViewMatrix;
 uniform mat4 u_Model;
-uniform mat4 u_LightSpaceMatrix;
 uniform mat4 u_JointMatrices[64];
 uniform bool u_HasSkin;
 out vec3 vFragPos;
 out vec3 vNormal;
 out vec2 vTexCoord;
 out vec4 vColor;
-out vec4 vFragPosLightSpace;
+out float vViewDepth;
 void main(){
     mat4 skinMatrix=mat4(1.0);
     if(u_HasSkin){
@@ -67,10 +69,10 @@ void main(){
     vec3 skinnedNormal=mat3(skinMatrix)*aNormal;
     vec4 worldPos=u_Model*skinnedPos;
     vFragPos=worldPos.xyz;
+    vViewDepth=-(u_ViewMatrix*worldPos).z;
     vNormal=normalize(mat3(u_Model)*skinnedNormal);
     vTexCoord=aTexCoord;
     vColor=aColor;
-    vFragPosLightSpace=u_LightSpaceMatrix*worldPos;
     gl_Position=u_ViewProjection*worldPos;
 }
 )glsl";
@@ -80,9 +82,9 @@ in vec3 vFragPos;
 in vec3 vNormal;
 in vec2 vTexCoord;
 in vec4 vColor;
-in vec4 vFragPosLightSpace;
+in float vViewDepth;
 uniform sampler2D u_Texture;
-uniform sampler2D u_ShadowMap;
+uniform sampler2DShadow u_ShadowMap;
 uniform samplerCube u_EnvironmentMap;
 uniform vec3 u_LightDirection;
 uniform vec3 u_LightColor;
@@ -95,6 +97,14 @@ uniform float u_Metallic;
 uniform float u_Roughness;
 uniform float u_AO;
 uniform float u_ShadowBias;
+uniform float u_NormalOffsetBias;
+uniform mat4 u_LightSpaceMatrices[4];
+uniform vec4 u_CascadeSplits;
+uniform int u_CascadeCount;
+uniform int u_PcfSamples;
+uniform int u_ShadowResolution;
+uniform float u_ShadowFar;
+uniform bool u_CascadeDebug;
 uniform bool u_ShadowEnabled;
 uniform bool u_UseTexture;
 uniform bool u_EncodeSrgb;
@@ -103,8 +113,18 @@ uniform bool u_CharacterLighting;
 uniform bool u_FogEnabled;
 uniform bool u_HemisphereEnabled;
 uniform float u_FogDensity;
+uniform int u_SkyPreset;
 out vec4 fragmentColor;
 const float PI=3.14159265359;
+const vec2 vogelDisk[16]=vec2[16](
+    vec2(0.39774756,0.00000000),vec2(-0.50600648,0.46359826),
+    vec2(0.07699518,-0.87695120),vec2(0.63738013,0.83107266),
+    vec2(-1.17545342,-0.20783601),vec2(1.09201976,-0.69323575),
+    vec2(-0.38563069,1.42172464),vec2(-0.73031095,-1.43165112),
+    vec2(1.63849415,0.59840280),vec2(-1.69456649,0.63232072),
+    vec2(0.99943070,-1.68609473),vec2(0.53272225,1.92035015),
+    vec2(-1.84741186,-1.09207306),vec2(2.17128113,-0.27538942),
+    vec2(-1.57984202,1.55766457),vec2(-0.08903172,-2.24734315));
 vec3 srgbToLinear(vec3 value){
     vec3 low=value/12.92;
     vec3 high=pow((value+0.055)/1.055,vec3(2.4));
@@ -114,6 +134,21 @@ vec3 linearToSrgb(vec3 value){
     vec3 low=value*12.92;
     vec3 high=1.055*pow(max(value,vec3(0.0)),vec3(1.0/2.4))-0.055;
     return mix(high,low,lessThanEqual(value,vec3(0.0031308)));
+}
+vec3 evaluateSkyColor(vec3 direction){
+    float horizon=1.0-smoothstep(-0.18,0.46,direction.y);
+    vec3 zenith=vec3(0.12,0.16,0.38);
+    vec3 horizonColor=vec3(0.94,0.36,0.20);
+    vec3 midColor=vec3(0.88,0.29,0.32);
+    if(u_SkyPreset==1){zenith=vec3(0.16,0.20,0.42);horizonColor=vec3(0.98,0.58,0.48);midColor=vec3(0.65,0.38,0.62);}
+    else if(u_SkyPreset==2){zenith=vec3(0.12,0.36,0.68);horizonColor=vec3(0.78,0.84,0.91);midColor=vec3(0.34,0.58,0.82);}
+    else if(u_SkyPreset==3){zenith=vec3(0.12,0.38,0.75);horizonColor=vec3(0.55,0.62,0.70);midColor=horizonColor;}
+    vec3 sky=mix(zenith,horizonColor,horizon);
+    sky=mix(sky,midColor,exp(-pow((direction.y-0.25)*3.5,2.0))*0.52);
+    float sun= max(dot(direction,normalize(-u_LightDirection)),0.0);
+    float horizonBand=exp(-pow((direction.y-0.015)*7.0,2.0));
+    sky+=vec3(0.72,0.30,0.10)*exp(-max(0.0,1.0-sun)*32.0)*(0.2+0.8*horizonBand);
+    return srgbToLinear(sky);
 }
 float distributionGgx(float nDotH,float roughness){
     float a=roughness*roughness;
@@ -132,21 +167,52 @@ float geometrySmith(float nDotV,float nDotL,float roughness){
 vec3 fresnelSchlick(float cosine,vec3 f0){
     return f0+(1.0-f0)*pow(clamp(1.0-cosine,0.0,1.0),5.0);
 }
-float calculateShadow(vec3 normal, vec3 lightDir){
-    if(!u_ShadowEnabled) return 0.0;
-    vec3 projected=vFragPosLightSpace.xyz/vFragPosLightSpace.w;
-    projected=projected*0.5+0.5;
+float sampleCascadeShadow(int cascade, vec3 worldPosition, vec3 normal, vec3 lightDir){
+    vec3 offsetPosition=worldPosition+normal*u_NormalOffsetBias;
+    vec4 lightClip=u_LightSpaceMatrices[cascade]*vec4(offsetPosition,1.0);
+    vec3 projected=lightClip.xyz/lightClip.w*0.5+0.5;
     if(projected.z>1.0 || projected.x<0.0 || projected.x>1.0 || projected.y<0.0 || projected.y>1.0) return 0.0;
-    float bias=max(u_ShadowBias*(1.0-dot(normal,lightDir)),u_ShadowBias*0.2);
-    vec2 texelSize=1.0/vec2(textureSize(u_ShadowMap,0));
+    float bias=max(u_ShadowBias*(1.0-max(dot(normal,lightDir),0.0)),u_ShadowBias*0.12);
+    int rotationIndex=(int(gl_FragCoord.x)+int(gl_FragCoord.y))&3;
+    vec2 atlasOrigin=vec2(float(cascade%2),float(cascade/2))*0.5;
+    vec2 atlasUv=projected.xy*0.5+atlasOrigin;
+    vec2 texel=vec2(1.0/float(u_ShadowResolution*2));
     float shadow=0.0;
-    for(int x=-1;x<=1;++x){
-        for(int y=-1;y<=1;++y){
-            float closestDepth=texture(u_ShadowMap,projected.xy+vec2(x,y)*texelSize).r;
-            shadow+=(projected.z-bias)>closestDepth?1.0:0.0;
-        }
+    int fetchCount=max(1,u_PcfSamples/4);
+    int sampleStride=16/fetchCount;
+    for(int sampleIndex=0;sampleIndex<4;++sampleIndex){
+        if(sampleIndex>=fetchCount) break;
+        vec2 disk=vogelDisk[sampleIndex*sampleStride];
+        if(rotationIndex==1) disk=vec2(-disk.y,disk.x);
+        else if(rotationIndex==2) disk=-disk;
+        else if(rotationIndex==3) disk=vec2(disk.y,-disk.x);
+        vec2 localOffset=disk*texel;
+        vec2 clampedUv=clamp(atlasUv+localOffset,atlasOrigin+texel*1.5,atlasOrigin+vec2(0.5)-texel*1.5);
+        shadow+=1.0-texture(u_ShadowMap,vec3(clampedUv,projected.z-bias));
     }
-    return shadow/9.0;
+    return shadow/float(fetchCount);
+}
+int selectCascade(float viewDistance){
+    int cascade=0;
+    for(int index=0;index<3;++index)
+        if(index<u_CascadeCount-1 && viewDistance>u_CascadeSplits[index]) cascade=index+1;
+    return cascade;
+}
+float calculateShadow(vec3 normal, vec3 lightDir){
+    if(!u_ShadowEnabled || u_CascadeCount<=0) return 0.0;
+    if(dot(normal,lightDir)<=0.015) return 0.0;
+    float viewDistance=vViewDepth;
+    if(viewDistance>u_ShadowFar) return 0.0;
+    int cascade=selectCascade(viewDistance);
+    float shadow=sampleCascadeShadow(cascade,vFragPos,normal,lightDir);
+    float splitNear=cascade==0?0.1:u_CascadeSplits[cascade-1];
+    float splitFar=u_CascadeSplits[cascade];
+    float blendStart=mix(splitNear,splitFar,0.90);
+    if(cascade<u_CascadeCount-1 && viewDistance>blendStart){
+        float nextShadow=sampleCascadeShadow(cascade+1,vFragPos,normal,lightDir);
+        shadow=mix(shadow,nextShadow,smoothstep(blendStart,splitFar,viewDistance));
+    }
+    return shadow;
 }
 void main(){
     vec4 baseSample=u_UseTexture?texture(u_Texture,vTexCoord):vec4(u_BaseColor,1.0);
@@ -179,6 +245,10 @@ void main(){
     float shadow=calculateShadow(normal,lightDir);
     vec3 direct=(diffuse+specular)*srgbToLinear(u_LightColor)*u_DiffuseStrength*nDotL;
     vec3 litColor=ambient+(1.0-shadow)*direct;
+    if(u_CascadeDebug && u_ShadowEnabled){
+        const vec3 cascadeColors[4]=vec3[4](vec3(1.0,0.25,0.2),vec3(0.25,1.0,0.3),vec3(0.2,0.45,1.0),vec3(1.0,0.8,0.2));
+        litColor=mix(litColor,cascadeColors[selectCascade(vViewDepth)],0.35);
+    }
     if(u_CharacterLighting){
         float backLight=max(dot(normal,normalize(vec3(-lightDir.x,0.25,-lightDir.z))),0.0);
         float rim=pow(1.0-max(dot(normal,viewDir),0.0),3.0);
@@ -188,7 +258,7 @@ void main(){
     float heightDensity=exp(-max(vFragPos.y,0.0)*0.045);
     float fogAmount=1.0-exp(-pow(max(u_FogDensity,0.0)*dist*heightDensity,2.0));
     float fogFactor=u_FogEnabled?clamp(fogAmount*smoothstep(12.0,38.0,dist),0.0,0.82):0.0;
-    vec3 fogColor=srgbToLinear(mix(vec3(0.34,0.40,0.57),vec3(0.88,0.48,0.28),0.72));
+    vec3 fogColor=evaluateSkyColor(normalize(vFragPos-u_ViewPosition));
     vec3 finalColor=mix(litColor,fogColor,fogFactor)+u_EmissiveFactor;
     if(u_EncodeSrgb) finalColor=linearToSrgb(finalColor);
     fragmentColor=vec4(finalColor,baseSample.a);
@@ -198,7 +268,7 @@ void main(){
 } // namespace
 
 ModelRenderer::ModelRenderer(const std::filesystem::path& path)
-    : gl_(), shadowMap_(gl_), depthShader_(gl_, depthVertexSource, depthFragmentSource),
+    : gl_(), depthShader_(gl_, depthVertexSource, depthFragmentSource),
       shader_(gl_, vertexSource, fragmentSource), model_(gl_, path), groundPlane_(gl_), skybox_(gl_),
       particleRenderer_(gl_) {
     gl_.enable(GL_DEPTH_TEST);
@@ -255,36 +325,56 @@ ModelRenderer::ModelRenderer(const std::filesystem::path& path)
 }
 
 void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPosition,
-    const DirectionalLight& light, int width, int height, RenderPipeline& pipeline) const {
+    const DirectionalLight& light, int width, int height, RenderPipeline& pipeline,
+    const std::vector<RenderActor>& actors) const {
     if (width <= 0 || height <= 0) return;
-    const glm::mat4 lightSpace = calculateLightSpaceMatrix(
-        light.direction, glm::vec3(0.0F), glm::vec2(28.0F), 0.1F, 80.0F);
+    const std::vector<float> splits = calculateCascadeSplits(0.1F, shadowFar_, cascadeCount_, cascadeLambda_);
+    const auto lightSpaces = calculateCascadeLightSpaceMatrices(
+        view, projection, light.direction, splits, 0.1F, pipeline.shadowMap().resolution());
     const std::vector<glm::mat4> palette = model_.skinPalette();
 
     if (shadowsEnabled_) {
-        pipeline.beginPass(GpuPass::Shadow);
-        shadowMap_.bindForWriting();
-        gl_.viewport(0, 0, shadowMap_.resolution(), shadowMap_.resolution());
+        ShadowMap& atlas = pipeline.shadowMap();
+        atlas.bindForWriting(0);
         gl_.clear(GL_DEPTH_BUFFER_BIT);
-        depthShader_.use();
-        depthShader_.setViewProjection(lightSpace);
-        depthShader_.setSkinPalette(palette, model_.hasSkin());
-        depthShader_.setModelMatrix(glm::mat4(1.0F));
-        groundPlane_.draw();
-        depthShader_.setModelMatrix(modelTransform_);
-        model_.draw();
-        for (const auto& prop : staticProps_) {
-            auto it = propModelTemplates_.find(prop.type);
-            if (it != propModelTemplates_.end() && it->second) {
-                glm::mat4 m = glm::translate(glm::mat4(1.0F), prop.position) *
+        for (int cascade = 0; cascade < cascadeCount_; ++cascade) {
+            pipeline.beginPass(static_cast<GpuPass>(static_cast<std::size_t>(GpuPass::ShadowCascade0) +
+                static_cast<std::size_t>(cascade)));
+            atlas.bindForWriting(cascade);
+            depthShader_.use();
+            depthShader_.setViewProjection(lightSpaces[static_cast<std::size_t>(cascade)]);
+            depthShader_.setModelMatrix(glm::mat4(1.0F));
+            depthShader_.setSkinPalette({}, false);
+            groundPlane_.draw();
+            for (const auto& prop : staticProps_) {
+                auto it = propModelTemplates_.find(prop.type);
+                if (it == propModelTemplates_.end() || !it->second ||
+                    !sphereIntersectsClip(lightSpaces[static_cast<std::size_t>(cascade)], prop.position,
+                        std::max(1.0F, std::abs(prop.scale) * 2.5F))) continue;
+                const glm::mat4 transform = glm::translate(glm::mat4(1.0F), prop.position) *
                     glm::rotate(glm::mat4(1.0F), glm::radians(prop.yaw), glm::vec3(0.0F, 1.0F, 0.0F)) *
                     glm::scale(glm::mat4(1.0F), glm::vec3(prop.scale));
-                depthShader_.setModelMatrix(m);
-                depthShader_.setSkinPalette({}, false);
+                depthShader_.setModelMatrix(transform);
                 it->second->draw();
             }
+            depthShader_.setModelMatrix(modelTransform_);
+            depthShader_.setSkinPalette(palette, model_.hasSkin());
+            model_.draw();
+            pipeline.endPass();
+
+            pipeline.beginActorShadowTiming(cascade);
+            for (const RenderActor& actor : actors) {
+                if (!actor.renderer || !sphereIntersectsClip(lightSpaces[static_cast<std::size_t>(cascade)],
+                    actor.position, actor.scale * 2.5F)) continue;
+                const ModelRenderer& source = *actor.renderer;
+                depthShader_.setModelMatrix(glm::translate(glm::mat4(1.0F), actor.position) *
+                    glm::rotate(glm::mat4(1.0F), glm::radians(actor.yaw), glm::vec3(0.0F, 1.0F, 0.0F)) *
+                    glm::scale(glm::mat4(1.0F), glm::vec3(actor.scale)));
+                depthShader_.setSkinPalette(source.model_.skinPalette(), source.model_.hasSkin());
+                source.model_.draw();
+            }
+            pipeline.endActorShadowTiming(cascade);
         }
-        pipeline.endPass();
     }
 
     ShadowMap::bindDefaultFramebuffer(gl_);
@@ -296,13 +386,33 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
     gl_.clearColor(clearRed, clearGreen, clearBlue, 1.0F);
     gl_.clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    shadowMap_.bindForSampling(1);
+    pipeline.shadowMap().bindForSampling(1);
     skybox_.bindEnvironment(2);
     gl_.activeTexture(GL_TEXTURE0);
     shader_.use();
     shader_.setViewProjection(projection * view);
+    const GLint viewMatrixLocation = gl_.getUniformLocation(shader_.program(), "u_ViewMatrix");
+    if (viewMatrixLocation >= 0) gl_.uniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, glm::value_ptr(view));
     shader_.setModelMatrix(glm::mat4(1.0F));
-    shader_.setLightSpaceMatrix(lightSpace);
+    const GLint matricesLocation = gl_.getUniformLocation(shader_.program(), "u_LightSpaceMatrices[0]");
+    if (matricesLocation >= 0) gl_.uniformMatrix4fv(matricesLocation, cascadeCount_, GL_FALSE,
+        glm::value_ptr(lightSpaces[0]));
+    const GLint splitsLocation = gl_.getUniformLocation(shader_.program(), "u_CascadeSplits");
+    if (splitsLocation >= 0) gl_.uniform4f(splitsLocation,
+        splits[0], splits.size() > 1 ? splits[1] : splits[0],
+        splits.size() > 2 ? splits[2] : splits.back(), splits.size() > 3 ? splits[3] : splits.back());
+    const GLint cascadeCountLocation = gl_.getUniformLocation(shader_.program(), "u_CascadeCount");
+    if (cascadeCountLocation >= 0) gl_.uniform1i(cascadeCountLocation, cascadeCount_);
+    const GLint shadowFarLocation = gl_.getUniformLocation(shader_.program(), "u_ShadowFar");
+    if (shadowFarLocation >= 0) gl_.uniform1f(shadowFarLocation, shadowFar_);
+    const GLint pcfLocation = gl_.getUniformLocation(shader_.program(), "u_PcfSamples");
+    if (pcfLocation >= 0) gl_.uniform1i(pcfLocation, pcfSamples_);
+    const GLint resolutionLocation = gl_.getUniformLocation(shader_.program(), "u_ShadowResolution");
+    if (resolutionLocation >= 0) gl_.uniform1i(resolutionLocation, pipeline.shadowMap().resolution());
+    const GLint normalBiasLocation = gl_.getUniformLocation(shader_.program(), "u_NormalOffsetBias");
+    if (normalBiasLocation >= 0) gl_.uniform1f(normalBiasLocation, normalOffsetBias_);
+    const GLint debugLocation = gl_.getUniformLocation(shader_.program(), "u_CascadeDebug");
+    if (debugLocation >= 0) gl_.uniform1i(debugLocation, cascadeDebug_ ? GL_TRUE : GL_FALSE);
     shader_.setLighting(light, viewPosition);
     shader_.setShadowSettings(shadowsEnabled_, shadowBias_);
     shader_.setPbrMaterial(metallic_, roughness_, ambientOcclusion_);
@@ -312,6 +422,7 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
     gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_FogEnabled"), fogEnabled_ ? GL_TRUE : GL_FALSE);
     gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_HemisphereEnabled"), hemisphereEnabled_ ? GL_TRUE : GL_FALSE);
     gl_.uniform1f(gl_.getUniformLocation(shader_.program(), "u_FogDensity"), fogDensity_);
+    gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_SkyPreset"), skyPreset_);
     shader_.setEmissiveFactor({0.0F, 0.0F, 0.0F});
     pipeline.beginPass(GpuPass::Scene);
     if (arenaFloorTexture_) {
@@ -352,66 +463,31 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
     shader_.setModelMatrix(modelTransform_);
     model_.bindTexture(0);
     model_.draw();
+    for (const RenderActor& actor : actors) {
+        if (!actor.renderer) continue;
+        const ModelRenderer& source = *actor.renderer;
+        shader_.setModelMatrix(glm::translate(glm::mat4(1.0F), actor.position) *
+            glm::rotate(glm::mat4(1.0F), glm::radians(actor.yaw), glm::vec3(0.0F, 1.0F, 0.0F)) *
+            glm::scale(glm::mat4(1.0F), glm::vec3(actor.scale)));
+        shader_.setSkinPalette(source.model_.skinPalette(), source.model_.hasSkin());
+        shader_.setBaseColorFactor(source.model_.baseColorFactor() * glm::vec3(
+            srgbToLinear(actor.tint.r), srgbToLinear(actor.tint.g), srgbToLinear(actor.tint.b)));
+        shader_.setEmissiveFactor(source.model_.emissiveFactor());
+        shader_.setPbrMaterial(source.metallic_, source.roughness_, source.ambientOcclusion_);
+        source.model_.bindTexture(0);
+        gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_CharacterLighting"),
+            characterLightingEnabled_ ? GL_TRUE : GL_FALSE);
+        source.model_.draw();
+    }
     pipeline.endPass();
     pipeline.beginPass(GpuPass::Sky);
-    if (skyboxEnabled_) skybox_.draw(view, projection, !pipeline.hdrEnabled());
+    if (skyboxEnabled_) skybox_.draw(view, projection, !pipeline.hdrEnabled(), light.direction, skyPreset_);
     pipeline.endPass();
     const glm::vec3 cameraRight = glm::normalize(glm::vec3(view[0][0], view[1][0], view[2][0]));
     const glm::vec3 cameraUp = glm::normalize(glm::vec3(view[0][1], view[1][1], view[2][1]));
     pipeline.beginPass(GpuPass::ParticleOverlay);
     particleRenderer_.draw(particles_, projection * view, cameraRight, cameraUp, !pipeline.hdrEnabled());
     pipeline.endPass();
-}
-
-void ModelRenderer::renderOverlay(const glm::mat4& view, const glm::mat4& projection,
-    const glm::vec3& viewPosition, const DirectionalLight& light, const glm::vec3& position,
-    float yawDegrees, float scale, const glm::vec3& tint, bool encodeSrgb,
-    int width, int height, RenderPipeline& pipeline) const {
-    if (!std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z) ||
-        !std::isfinite(yawDegrees) || !std::isfinite(scale) || scale <= 0.0F ||
-        !std::isfinite(tint.x) || !std::isfinite(tint.y) || !std::isfinite(tint.z)) return;
-    const glm::mat4 lightSpace = calculateLightSpaceMatrix(
-        light.direction, position, glm::vec2(18.0F), 0.1F, 55.0F);
-    if (shadowsEnabled_) {
-        shadowMap_.bindForWriting();
-        gl_.viewport(0, 0, shadowMap_.resolution(), shadowMap_.resolution());
-        gl_.clear(GL_DEPTH_BUFFER_BIT);
-        depthShader_.use();
-        depthShader_.setViewProjection(lightSpace);
-        depthShader_.setModelMatrix(glm::translate(glm::mat4(1.0F), position) *
-            glm::rotate(glm::mat4(1.0F), glm::radians(yawDegrees), glm::vec3(0.0F, 1.0F, 0.0F)) *
-            glm::scale(glm::mat4(1.0F), glm::vec3(scale)));
-        depthShader_.setSkinPalette(model_.skinPalette(), model_.hasSkin());
-        model_.draw();
-        ShadowMap::bindDefaultFramebuffer(gl_);
-        pipeline.bindSceneTarget();
-        gl_.viewport(0, 0, width, height);
-    }
-    shadowMap_.bindForSampling(1);
-    skybox_.bindEnvironment(2);
-    gl_.activeTexture(GL_TEXTURE0);
-    shader_.use();
-    shader_.setViewProjection(projection * view);
-    shader_.setModelMatrix(glm::translate(glm::mat4(1.0F), position) *
-        glm::rotate(glm::mat4(1.0F), glm::radians(yawDegrees), glm::vec3(0.0F, 1.0F, 0.0F)) *
-        glm::scale(glm::mat4(1.0F), glm::vec3(scale)));
-    shader_.setLighting(light, viewPosition);
-    shader_.setLightSpaceMatrix(lightSpace);
-    shader_.setShadowSettings(shadowsEnabled_, shadowBias_);
-    gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_CharacterLighting"),
-        characterLightingEnabled_ ? GL_TRUE : GL_FALSE);
-    gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_FogEnabled"), fogEnabled_ ? GL_TRUE : GL_FALSE);
-    gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_HemisphereEnabled"), hemisphereEnabled_ ? GL_TRUE : GL_FALSE);
-    gl_.uniform1f(gl_.getUniformLocation(shader_.program(), "u_FogDensity"), fogDensity_);
-    shader_.setEncodeSrgb(encodeSrgb);
-    shader_.setPbrMaterial(metallic_, roughness_, ambientOcclusion_);
-    shader_.setSkinPalette(model_.skinPalette(), model_.hasSkin());
-    shader_.useTexture(true);
-    shader_.setBaseColorFactor(model_.baseColorFactor() * glm::vec3(
-        srgbToLinear(tint.r), srgbToLinear(tint.g), srgbToLinear(tint.b)));
-    shader_.setEmissiveFactor(model_.emissiveFactor());
-    model_.bindTexture(0);
-    model_.draw();
 }
 
 void ModelRenderer::setTransform(const glm::vec3& position, float yawDegrees) noexcept {
@@ -461,6 +537,18 @@ float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
 
 void ModelRenderer::setShadowBias(float bias) noexcept {
     if (std::isfinite(bias)) shadowBias_ = std::clamp(bias, 0.0001F, 0.02F);
+}
+
+void ModelRenderer::setNormalOffsetBias(float bias) noexcept {
+    if (std::isfinite(bias)) normalOffsetBias_ = std::clamp(bias, 0.0F, 0.1F);
+}
+
+void ModelRenderer::setCascadeLambda(float lambda) noexcept {
+    if (std::isfinite(lambda)) cascadeLambda_ = std::clamp(lambda, 0.0F, 1.0F);
+}
+
+void ModelRenderer::setShadowFar(float distance) noexcept {
+    if (std::isfinite(distance)) shadowFar_ = std::clamp(distance, 20.0F, 300.0F);
 }
 
 void ModelRenderer::setFogDensity(float density) noexcept {

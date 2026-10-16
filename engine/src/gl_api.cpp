@@ -37,6 +37,7 @@ GlApi::GlApi() {
     uniformMatrix4fv = loadProcedure<PFNGLUNIFORMMATRIX4FVPROC>("glUniformMatrix4fv");
     uniform1f = loadProcedure<GloryGlUniform1fProc>("glUniform1f");
     uniform3f = loadProcedure<GloryGlUniform3fProc>("glUniform3f");
+    uniform4f = loadProcedure<GloryGlUniform4fProc>("glUniform4f");
     genVertexArrays = loadProcedure<PFNGLGENVERTEXARRAYSPROC>("glGenVertexArrays");
     bindVertexArray = loadProcedure<PFNGLBINDVERTEXARRAYPROC>("glBindVertexArray");
     deleteVertexArrays = loadProcedure<PFNGLDELETEVERTEXARRAYSPROC>("glDeleteVertexArrays");

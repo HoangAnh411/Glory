@@ -2,6 +2,7 @@
 
 #include "glory/engine/gl_api.hpp"
 #include "glory/engine/shader_program.hpp"
+#include "glory/engine/shadow_map.hpp"
 
 #include <array>
 #include <cstdint>
@@ -11,7 +12,10 @@
 
 namespace glory::engine {
 
-enum class GpuPass : std::size_t { Shadow, Scene, Sky, ParticleOverlay, Tonemap, Total, Count };
+enum class GpuPass : std::size_t {
+    ShadowCascade0, ShadowCascade1, ShadowCascade2, ShadowCascade3, ActorShadow,
+    Scene, Sky, ParticleOverlay, Tonemap, Total, Count
+};
 
 struct GpuTimingSample {
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> milliseconds{};
@@ -28,6 +32,8 @@ public:
     void bindSceneTarget() noexcept;
     void beginPass(GpuPass pass) noexcept;
     void endPass() noexcept;
+    void beginActorShadowTiming(int cascade) noexcept;
+    void endActorShadowTiming(int cascade) noexcept;
     void finishFrame();
     void setHdrEnabled(bool enabled) noexcept { hdrEnabled_ = enabled; }
     [[nodiscard]] bool hdrEnabled() const noexcept { return hdrEnabled_; }
@@ -39,10 +45,12 @@ public:
     [[nodiscard]] const std::deque<GpuTimingSample>& history() const noexcept { return history_; }
     [[nodiscard]] bool framebufferComplete() const noexcept { return framebufferComplete_; }
     [[nodiscard]] std::uint64_t resizeCount() const noexcept { return resizeCount_; }
+    [[nodiscard]] ShadowMap& shadowMap() noexcept { return shadowMap_; }
 
 private:
     static constexpr std::size_t passCount = static_cast<std::size_t>(GpuPass::Count);
-    static constexpr std::size_t queryCount = passCount + 1;
+    static constexpr std::size_t actorTimestampCount = 8;
+    static constexpr std::size_t queryCount = passCount + 1 + actorTimestampCount;
     static constexpr std::size_t ringSize = 3;
     struct QuerySlot {
         std::array<GLuint, queryCount> queries{};
@@ -55,6 +63,7 @@ private:
     [[nodiscard]] static std::size_t passIndex(GpuPass pass) noexcept;
 
     GlApi gl_;
+    ShadowMap shadowMap_;
     ShaderProgram tonemapShader_;
     GLuint framebuffer_ = 0;
     GLuint colorTexture_ = 0;

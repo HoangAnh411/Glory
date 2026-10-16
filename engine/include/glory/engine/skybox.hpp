@@ -10,7 +10,8 @@ public:
     ~Skybox();
     Skybox(const Skybox&) = delete;
     Skybox& operator=(const Skybox&) = delete;
-    void draw(const glm::mat4& view, const glm::mat4& projection, bool encodeSrgb) const noexcept;
+    void draw(const glm::mat4& view, const glm::mat4& projection, bool encodeSrgb,
+        const glm::vec3& lightDirection, int preset) const noexcept;
     void bindEnvironment(unsigned int unit) const noexcept;
 private:
     GlApi& gl_;
@@ -20,5 +21,7 @@ private:
     GLuint vertexBuffer_ = 0;
     GLint cubemapLocation_ = -1;
     GLint encodeSrgbLocation_ = -1;
+    GLint sunDirectionLocation_ = -1;
+    GLint presetLocation_ = -1;
 };
 }

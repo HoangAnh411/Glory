@@ -43,15 +43,10 @@ void main() {
 }
 )glsl";
 
-constexpr GLenum elapsedQueries[] = {
-    GL_TIME_ELAPSED, GL_TIME_ELAPSED, GL_TIME_ELAPSED,
-    GL_TIME_ELAPSED, GL_TIME_ELAPSED
-};
-
 } // namespace
 
 RenderPipeline::RenderPipeline()
-    : tonemapShader_(gl_, fullscreenVertexSource, tonemapFragmentSource) {
+    : shadowMap_(gl_), tonemapShader_(gl_, fullscreenVertexSource, tonemapFragmentSource) {
     const auto* renderer = gl_.getString(GL_RENDERER);
     const auto* version = gl_.getString(GL_VERSION);
     rendererInfo_ = renderer ? reinterpret_cast<const char*>(renderer) : "Unknown OpenGL renderer";
@@ -171,8 +166,16 @@ void RenderPipeline::collectAvailableQueries() noexcept {
             if (slot.issued[i]) gl_.getQueryObjectui64v(slot.queries[i], GL_QUERY_RESULT, &values[i]);
         }
         GpuTimingSample sample;
-        for (std::size_t i = 0; i < passCount - 1; ++i)
+    for (std::size_t i = 0; i < passCount - 1; ++i)
             sample.milliseconds[i] = static_cast<double>(values[i]) / 1.0e6;
+        sample.milliseconds[static_cast<std::size_t>(GpuPass::ActorShadow)] = 0.0;
+        for (std::size_t cascade = 0; cascade < 4; ++cascade) {
+            const std::size_t startIndex = passCount + 1 + cascade * 2;
+            const std::size_t endIndex = startIndex + 1;
+            if (values[endIndex] >= values[startIndex])
+                sample.milliseconds[static_cast<std::size_t>(GpuPass::ActorShadow)] +=
+                    static_cast<double>(values[endIndex] - values[startIndex]) / 1.0e6;
+        }
         sample.milliseconds[static_cast<std::size_t>(GpuPass::Total)] =
             values[passCount] >= values[passCount - 1]
                 ? static_cast<double>(values[passCount] - values[passCount - 1]) / 1.0e6 : 0.0;
@@ -226,6 +229,20 @@ void RenderPipeline::endPass() noexcept {
     if (!recordingQueries_ || activePass_ == GpuPass::Count) return;
     gl_.endQuery(GL_TIME_ELAPSED);
     activePass_ = GpuPass::Count;
+}
+
+void RenderPipeline::beginActorShadowTiming(int cascade) noexcept {
+    if (!recordingQueries_ || cascade < 0 || cascade >= 4) return;
+    const std::size_t queryIndex = passCount + 1 + static_cast<std::size_t>(cascade) * 2;
+    gl_.queryCounter(querySlots_[activeSlot_].queries[queryIndex], GL_TIMESTAMP);
+    querySlots_[activeSlot_].issued[queryIndex] = true;
+}
+
+void RenderPipeline::endActorShadowTiming(int cascade) noexcept {
+    if (!recordingQueries_ || cascade < 0 || cascade >= 4) return;
+    const std::size_t queryIndex = passCount + 2 + static_cast<std::size_t>(cascade) * 2;
+    gl_.queryCounter(querySlots_[activeSlot_].queries[queryIndex], GL_TIMESTAMP);
+    querySlots_[activeSlot_].issued[queryIndex] = true;
 }
 
 void RenderPipeline::finishFrame() {

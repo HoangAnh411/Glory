@@ -11,12 +11,14 @@ public:
     ShadowMap(const ShadowMap&) = delete;
     ShadowMap& operator=(const ShadowMap&) = delete;
 
-    void bindForWriting() const noexcept;
+    void bindForWriting(int cascade = 0) const noexcept;
     void bindForSampling(int textureUnit) const noexcept;
+    void setResolution(int resolution);
     static void bindDefaultFramebuffer(const GlApi& gl) noexcept;
     [[nodiscard]] int resolution() const noexcept { return resolution_; }
 
 private:
+    void allocate();
     void release() noexcept;
 
     GlApi& gl_;

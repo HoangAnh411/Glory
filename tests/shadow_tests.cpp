@@ -1,8 +1,7 @@
 #include "glory/engine/shadow_math.hpp"
 
-#include <glm/gtc/matrix_transform.hpp>
-
 #include <cmath>
+#include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <stdexcept>
 
@@ -37,6 +36,34 @@ int main() {
         const float fogHigh = calculateHeightFogFactor(120.0F, 30.0F, 0.008F);
         if (!(std::isfinite(fogNear) && std::isfinite(fogFar) && std::isfinite(fogHigh) &&
             fogNear < fogFar && fogHigh < fogFar)) throw std::runtime_error("height fog must be finite and attenuate by distance/height");
+        const glm::mat4 cameraProjection = glm::perspective(glm::radians(65.0F), 16.0F / 9.0F, 0.1F, 500.0F);
+        const glm::mat4 cameraViewA = glm::lookAt(glm::vec3(0.0F, 3.0F, 8.0F), glm::vec3(0.0F), glm::vec3(0.0F, 1.0F, 0.0F));
+        const glm::mat4 cameraViewB = glm::lookAt(glm::vec3(0.00001F, 3.0F, 8.0F), glm::vec3(0.00001F, 0.0F, 0.0F), glm::vec3(0.0F, 1.0F, 0.0F));
+        const auto cascadeMatricesA = glory::engine::calculateCascadeLightSpaceMatrices(
+            cameraViewA, cameraProjection, {-0.5F, -0.6F, -0.4F}, splits, 0.1F, 2048);
+        const auto cascadeMatricesB = glory::engine::calculateCascadeLightSpaceMatrices(
+            cameraViewB, cameraProjection, {-0.5F, -0.6F, -0.4F}, splits, 0.1F, 2048);
+        for (std::size_t cascade = 0; cascade < splits.size(); ++cascade)
+            for (int column = 0; column < 4; ++column)
+                for (int row = 0; row < 4; ++row)
+                    if (!std::isfinite(cascadeMatricesA[cascade][column][row]))
+                        throw std::runtime_error("cascade matrix contains a non-finite value");
+        requireNear(cascadeMatricesA[0][3][0], cascadeMatricesB[0][3][0], "sub-texel camera translation should not shift snapped cascade X");
+        requireNear(cascadeMatricesA[0][3][1], cascadeMatricesB[0][3][1], "sub-texel camera translation should not shift snapped cascade Y");
+        const auto threeSplits = calculateCascadeSplits(0.1F, 80.0F, 3, 0.5F);
+        const auto threeCascadeMatrices = glory::engine::calculateCascadeLightSpaceMatrices(
+            cameraViewA, cameraProjection, {-0.5F, -0.6F, -0.4F}, threeSplits, 0.1F, 1024);
+        bool rejected = false;
+        const glm::vec3 nearVisible = glm::vec3(0.0F, 3.0F, 8.0F) +
+            glm::normalize(glm::vec3(0.0F, 0.0F, 0.0F) - glm::vec3(0.0F, 3.0F, 8.0F)) * 2.0F;
+        if (!glory::engine::sphereIntersectsClip(threeCascadeMatrices[0], nearVisible, 1.0F))
+            throw std::runtime_error("visible actor sphere was culled from the near cascade");
+        rejected = false;
+        try {
+            (void)glory::engine::calculateCascadeLightSpaceMatrices(
+                cameraViewA, cameraProjection, {-0.5F, -0.6F, -0.4F}, {4.0F, 3.0F}, 0.1F, 2048);
+        } catch (const std::invalid_argument&) { rejected = true; }
+        if (!rejected) throw std::runtime_error("unordered cascade splits were accepted");
         const glm::vec3 center{2.0F, 3.0F, 4.0F};
         const glm::mat4 matrix = calculateLightSpaceMatrix(
             {0.0F, 0.0F, -1.0F}, center, {5.0F, 7.0F}, 1.0F, 21.0F);
@@ -57,7 +84,7 @@ int main() {
         const float sourceSideDepth = project(downwardLight, center + glm::vec3(0.0F, 1.0F, 0.0F)).z;
         if (!(sourceSideDepth < centerDepth)) throw std::runtime_error("vertical light direction was not oriented toward the scene");
 
-        bool rejected = false;
+        rejected = false;
         try { (void)calculateLightSpaceMatrix({0.0F, 0.0F, 0.0F}, center, {5.0F, 5.0F}, 1.0F, 21.0F); }
         catch (const std::invalid_argument&) { rejected = true; }
         if (!rejected) throw std::runtime_error("zero light direction was accepted");

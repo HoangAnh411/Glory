@@ -18,6 +18,7 @@ typedef void (APIENTRYP GloryGlDeleteTexturesProc)(GLsizei count, const GLuint* 
 typedef void (APIENTRYP GloryGlGenerateMipmapProc)(GLenum target);
 typedef void (APIENTRYP GloryGlUniform1fProc)(GLint location, GLfloat value);
 typedef void (APIENTRYP GloryGlUniform3fProc)(GLint location, GLfloat x, GLfloat y, GLfloat z);
+typedef void (APIENTRYP GloryGlUniform4fProc)(GLint location, GLfloat x, GLfloat y, GLfloat z, GLfloat w);
 typedef void (APIENTRYP GloryGlVertexAttribIPointerProc)(GLuint index, GLint size, GLenum type, GLsizei stride, const void* pointer);
 typedef void (APIENTRYP GloryGlGenFramebuffersProc)(GLsizei count, GLuint* framebuffers);
 typedef void (APIENTRYP GloryGlBindFramebufferProc)(GLenum target, GLuint framebuffer);
@@ -90,6 +91,7 @@ public:
     PFNGLUNIFORM1IPROC uniform1i = nullptr;
     GloryGlUniform1fProc uniform1f = nullptr;
     GloryGlUniform3fProc uniform3f = nullptr;
+    GloryGlUniform4fProc uniform4f = nullptr;
     GloryGlViewportProc viewport = nullptr;
     GloryGlClearColorProc clearColor = nullptr;
     GloryGlClearProc clear = nullptr;

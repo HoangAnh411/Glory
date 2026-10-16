@@ -11,6 +11,7 @@
 #include "glory/engine/texture2d.hpp"
 #include "glory/engine/render_pipeline.hpp"
 #include <filesystem>
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -19,6 +20,14 @@
 #include <glm/vec3.hpp>
 #include <functional>
 namespace glory::engine {
+class ModelRenderer;
+struct RenderActor {
+    ModelRenderer* renderer = nullptr;
+    glm::vec3 position{0.0F};
+    float yaw = 0.0F;
+    float scale = 1.0F;
+    glm::vec3 tint{1.0F};
+};
 struct StaticWorldProp {
     std::string type;
     glm::vec3 position{0.0F};
@@ -29,11 +38,8 @@ class ModelRenderer {
 public:
     explicit ModelRenderer(const std::filesystem::path& modelPath);
     void render(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPosition,
-        const DirectionalLight& light, int width, int height, RenderPipeline& pipeline) const;
-    void renderOverlay(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPosition,
-        const DirectionalLight& light, const glm::vec3& position, float yawDegrees, float scale,
-        const glm::vec3& tint, bool encodeSrgb, int width, int height,
-        RenderPipeline& pipeline) const;
+        const DirectionalLight& light, int width, int height, RenderPipeline& pipeline,
+        const std::vector<RenderActor>& actors = {}) const;
     void updateAnimation(float deltaSeconds);
     void setTransform(const glm::vec3& position, float yawDegrees) noexcept;
     [[nodiscard]] float cameraObstructionDistance(const glm::vec3& origin,
@@ -57,10 +63,24 @@ public:
     [[nodiscard]] bool fogEnabled() const noexcept { return fogEnabled_; }
     void setFogDensity(float density) noexcept;
     [[nodiscard]] float fogDensity() const noexcept { return fogDensity_; }
+    void setSkyPreset(int preset) noexcept { skyPreset_ = std::clamp(preset, 0, 3); }
+    [[nodiscard]] int skyPreset() const noexcept { return skyPreset_; }
     void setHemisphereEnabled(bool enabled) noexcept { hemisphereEnabled_ = enabled; }
     [[nodiscard]] bool hemisphereEnabled() const noexcept { return hemisphereEnabled_; }
     void setShadowBias(float bias) noexcept;
     [[nodiscard]] float shadowBias() const noexcept { return shadowBias_; }
+    void setNormalOffsetBias(float bias) noexcept;
+    [[nodiscard]] float normalOffsetBias() const noexcept { return normalOffsetBias_; }
+    void setCascadeCount(int count) noexcept { cascadeCount_ = std::clamp(count, 3, 4); }
+    [[nodiscard]] int cascadeCount() const noexcept { return cascadeCount_; }
+    void setCascadeLambda(float lambda) noexcept;
+    [[nodiscard]] float cascadeLambda() const noexcept { return cascadeLambda_; }
+    void setShadowFar(float distance) noexcept;
+    [[nodiscard]] float shadowFar() const noexcept { return shadowFar_; }
+    void setPcfSamples(int samples) noexcept { pcfSamples_ = samples <= 4 ? 4 : (samples <= 8 ? 8 : 16); }
+    [[nodiscard]] int pcfSamples() const noexcept { return pcfSamples_; }
+    void setCascadeDebug(bool enabled) noexcept { cascadeDebug_ = enabled; }
+    [[nodiscard]] bool cascadeDebug() const noexcept { return cascadeDebug_; }
     void setPbrMaterial(float metallic, float roughness, float ao) noexcept;
     [[nodiscard]] float metallic() const noexcept { return metallic_; }
     [[nodiscard]] float roughness() const noexcept { return roughness_; }
@@ -77,7 +97,6 @@ public:
     [[nodiscard]] const std::string& animationName(std::size_t index) const noexcept;
 private:
     GlApi gl_;
-    ShadowMap shadowMap_;
     ShaderProgram depthShader_;
     ShaderProgram shader_;
     Model model_;
@@ -90,7 +109,14 @@ private:
     bool fogEnabled_ = true;
     bool hemisphereEnabled_ = true;
     float fogDensity_ = 0.008F;
+    int skyPreset_ = 0;
     float shadowBias_ = 0.005F;
+    float normalOffsetBias_ = 0.015F;
+    int cascadeCount_ = 4;
+    float cascadeLambda_ = 0.65F;
+    float shadowFar_ = 100.0F;
+    int pcfSamples_ = 16;
+    bool cascadeDebug_ = false;
     float metallic_ = 0.0F;
     float roughness_ = 0.5F;
     float ambientOcclusion_ = 1.0F;

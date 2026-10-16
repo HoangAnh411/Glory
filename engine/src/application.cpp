@@ -339,9 +339,8 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 config.feedbackPanel, config.feedbackSubmit,
                 light, renderer, audio);
             renderPipeline.beginFrame(drawableWidth, drawableHeight);
-            renderer.render(view, projection, cameraPosition, light, drawableWidth, drawableHeight, renderPipeline);
             std::unordered_set<std::uint32_t> visibleRemoteIds;
-            renderPipeline.beginPass(GpuPass::ParticleOverlay);
+            std::vector<RenderActor> renderActors;
             for (const auto& remote : player.remotePlayers) {
                 visibleRemoteIds.insert(remote.clientId);
                 auto [entry, inserted] = remoteRenderers.try_emplace(remote.clientId);
@@ -350,11 +349,6 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     entry->second.model->setSkyboxEnabled(false);
                 }
                 ModelRenderer& remoteModel = *entry->second.model;
-                remoteModel.setShadowsEnabled(renderer.shadowsEnabled());
-                remoteModel.setCharacterLightingEnabled(renderer.characterLightingEnabled());
-                remoteModel.setFogEnabled(renderer.fogEnabled());
-                remoteModel.setFogDensity(renderer.fogDensity());
-                remoteModel.setHemisphereEnabled(renderer.hemisphereEnabled());
                 if (entry->second.animationState != remote.animationState &&
                     remoteModel.triggerAnimationState(remote.animationState))
                     entry->second.animationState = remote.animationState;
@@ -362,23 +356,16 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 const std::uint32_t colorIndex = remote.clientId % 3;
                 const glm::vec3 tint = colorIndex == 0 ? glm::vec3(0.45F, 0.72F, 1.0F) :
                     (colorIndex == 1 ? glm::vec3(1.0F, 0.55F, 0.38F) : glm::vec3(0.55F, 1.0F, 0.62F));
-                remoteModel.renderOverlay(view, projection, cameraPosition, light,
-                    remote.position, remote.yaw, 1.0F, tint, !renderPipeline.hdrEnabled(),
-                    drawableWidth, drawableHeight, renderPipeline);
+                renderActors.push_back({&remoteModel, remote.position, remote.yaw, 1.0F, tint});
             }
             std::erase_if(remoteRenderers, [&visibleRemoteIds](const auto& entry) {
                 return !visibleRemoteIds.contains(entry.first);
             });
-            bossRenderer.setShadowsEnabled(renderer.shadowsEnabled());
-            bossRenderer.setCharacterLightingEnabled(renderer.characterLightingEnabled());
-            bossRenderer.setFogEnabled(renderer.fogEnabled());
-            bossRenderer.setFogDensity(renderer.fogDensity());
-            bossRenderer.setHemisphereEnabled(renderer.hemisphereEnabled());
             if (!player.bossDefeated)
-                bossRenderer.renderOverlay(view, projection, cameraPosition, light,
-                    player.bossPosition, player.bossYaw, 1.8F, glm::vec3(1.15F, 0.45F, 0.45F),
-                    !renderPipeline.hdrEnabled(), drawableWidth, drawableHeight, renderPipeline);
-            renderPipeline.endPass();
+                renderActors.push_back({&bossRenderer, player.bossPosition, player.bossYaw, 1.8F,
+                    glm::vec3(1.15F, 0.45F, 0.45F)});
+            renderer.render(view, projection, cameraPosition, light, drawableWidth, drawableHeight,
+                renderPipeline, renderActors);
             renderPipeline.finishFrame();
             debugPanel.render();
             SDL_GL_SwapWindow(window);
@@ -396,7 +383,8 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     for (std::size_t pass = 0; pass < totals.size(); ++pass) totals[pass] += sample.milliseconds[pass];
                 std::cout << std::fixed << std::setprecision(3)
                           << "GPU pass averages (ms, " << renderPipeline.history().size() << " frames):";
-                constexpr const char* names[] = {"shadow", "scene", "sky", "particle_overlay", "tonemap", "gpu_frame"};
+                constexpr const char* names[] = {"shadow_cascade_0", "shadow_cascade_1", "shadow_cascade_2",
+                    "shadow_cascade_3", "boss_remote_shadow", "scene", "sky", "particle_overlay", "tonemap", "gpu_frame"};
                 for (std::size_t pass = 0; pass < totals.size(); ++pass)
                     std::cout << ' ' << names[pass] << '=' << totals[pass] / renderPipeline.history().size();
                 std::cout << '\n';

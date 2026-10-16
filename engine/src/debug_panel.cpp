@@ -604,7 +604,9 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     ImGui::Text("GPU timing: %s", renderPipeline.timerStatus().c_str());
                     ImGui::TextWrapped("Renderer: %s", renderPipeline.rendererInfo().c_str());
                     if (!renderPipeline.history().empty()) {
-                        constexpr const char* passNames[] = {"Shadow", "Scene", "Sky", "Particle/overlay", "Tonemap", "GPU frame"};
+                        constexpr const char* passNames[] = {"Shadow cascade 0", "Shadow cascade 1",
+                            "Shadow cascade 2", "Shadow cascade 3", "Boss/remote shadow",
+                            "Opaque scene", "Sky", "Particle/overlay", "Tonemap", "GPU frame"};
                         const GpuTimingSample& latest = renderPipeline.history().back();
                         for (std::size_t index = 0; index < latest.milliseconds.size(); ++index)
                             ImGui::Text("%s: %.3f ms", passNames[index], latest.milliseconds[index]);
@@ -639,17 +641,32 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                         switch (lightingPreset) {
                         case 0:
                             light.direction = {-0.612F, -0.5F, -0.612F}; light.color = {1.0F, 0.68F, 0.42F};
-                            light.ambientStrength = 0.72F; light.diffuseStrength = 1.35F; break;
+                            light.ambientStrength = 0.72F; light.diffuseStrength = 1.35F;
+                            renderer.setSkyPreset(0); renderer.setFogDensity(0.008F); renderer.setCascadeCount(4); renderer.setShadowFar(100.0F);
+                            renderer.setCascadeLambda(0.65F); renderer.setPcfSamples(16); renderPipeline.shadowMap().setResolution(2048); break;
                         case 1:
                             light.direction = {-0.36F, -0.5F, -0.78F}; light.color = {0.72F, 0.62F, 1.0F};
-                            light.ambientStrength = 0.82F; light.diffuseStrength = 1.1F; break;
+                            light.ambientStrength = 0.82F; light.diffuseStrength = 1.1F;
+                            renderer.setSkyPreset(1); renderer.setFogDensity(0.007F); renderer.setCascadeCount(4); renderer.setShadowFar(90.0F);
+                            renderer.setCascadeLambda(0.65F); renderer.setPcfSamples(16); renderPipeline.shadowMap().setResolution(2048); break;
                         case 2:
                             light.direction = {-0.18F, -0.94F, -0.30F}; light.color = {1.0F, 0.96F, 0.88F};
-                            light.ambientStrength = 0.9F; light.diffuseStrength = 1.0F; break;
+                            light.ambientStrength = 0.9F; light.diffuseStrength = 1.0F;
+                            renderer.setSkyPreset(2); renderer.setFogDensity(0.003F); renderer.setCascadeCount(3); renderer.setShadowFar(75.0F);
+                            renderer.setCascadeLambda(0.45F); renderer.setPcfSamples(8); renderPipeline.shadowMap().setResolution(1024); break;
                         default:
                             light.direction = {0.25F, -0.85F, 0.45F}; light.color = {1.0F, 0.96F, 0.90F};
-                            light.ambientStrength = 0.55F; light.diffuseStrength = 0.95F; break;
+                            light.ambientStrength = 0.55F; light.diffuseStrength = 0.95F;
+                            renderer.setSkyPreset(3); renderer.setFogDensity(0.008F); renderer.setShadowFar(60.0F);
+                            renderer.setCascadeCount(3); renderer.setCascadeLambda(0.65F);
+                            renderer.setPcfSamples(4); renderPipeline.shadowMap().setResolution(2048); break;
                         }
+                        renderer.setSkyPreset(lightingPreset);
+                        renderer.setShadowsEnabled(true);
+                        renderer.setHemisphereEnabled(true);
+                        renderer.setFogEnabled(true);
+                        renderer.setSkyboxEnabled(true);
+                        renderer.setCharacterLightingEnabled(lightingPreset != 3);
                     }
                     bool hemisphere = renderer.hemisphereEnabled();
                     if (ImGui::Checkbox("Hemisphere ambient", &hemisphere)) renderer.setHemisphereEnabled(hemisphere);
@@ -658,14 +675,33 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     float fogDensity = renderer.fogDensity();
                     if (ImGui::SliderFloat("Fog density", &fogDensity, 0.0F, 0.03F, "%.4f")) renderer.setFogDensity(fogDensity);
                     bool newSky = renderer.skyboxEnabled();
-                    if (ImGui::Checkbox("Layered sunset sky", &newSky)) renderer.setSkyboxEnabled(newSky);
+                    if (ImGui::Checkbox("Sky gradient and sun", &newSky)) renderer.setSkyboxEnabled(newSky);
                     bool characterLighting = renderer.characterLightingEnabled();
                     if (ImGui::Checkbox("Character fill / rim", &characterLighting))
                         renderer.setCharacterLightingEnabled(characterLighting);
+                    int cascadeCount = renderer.cascadeCount();
+                    if (ImGui::SliderInt("Cascade count", &cascadeCount, 3, 4)) renderer.setCascadeCount(cascadeCount);
+                    float cascadeLambda = renderer.cascadeLambda();
+                    if (ImGui::SliderFloat("Cascade lambda", &cascadeLambda, 0.0F, 1.0F)) renderer.setCascadeLambda(cascadeLambda);
+                    float shadowFar = renderer.shadowFar();
+                    if (ImGui::SliderFloat("Shadow distance", &shadowFar, 20.0F, 300.0F, "%.0f m")) renderer.setShadowFar(shadowFar);
+                    int mapResolution = renderPipeline.shadowMap().resolution();
+                    const char* mapSizes[] = {"1024", "2048", "4096"};
+                    int mapIndex = mapResolution == 1024 ? 0 : (mapResolution == 4096 ? 2 : 1);
+                    if (ImGui::Combo("Cascade map size", &mapIndex, mapSizes, 3))
+                        renderPipeline.shadowMap().setResolution(mapIndex == 0 ? 1024 : (mapIndex == 2 ? 4096 : 2048));
+                    int pcfSamples = renderer.pcfSamples();
+                    const char* pcfModes[] = {"4 (Low)", "8 (Medium)", "16 (High)"};
+                    int pcfIndex = pcfSamples == 4 ? 0 : (pcfSamples == 8 ? 1 : 2);
+                    if (ImGui::Combo("PCF samples", &pcfIndex, pcfModes, 3)) renderer.setPcfSamples(pcfIndex == 0 ? 4 : (pcfIndex == 1 ? 8 : 16));
+                    bool cascadeDebug = renderer.cascadeDebug();
+                    if (ImGui::Checkbox("Cascade color debug", &cascadeDebug)) renderer.setCascadeDebug(cascadeDebug);
                     float shadowBias = renderer.shadowBias();
                     if (ImGui::SliderFloat("Shadow Bias", &shadowBias, 0.0001F, 0.02F, "%.4f", ImGuiSliderFlags_Logarithmic)) {
                         renderer.setShadowBias(shadowBias);
                     }
+                    float normalBias = renderer.normalOffsetBias();
+                    if (ImGui::SliderFloat("Normal offset bias", &normalBias, 0.0F, 0.05F, "%.4f")) renderer.setNormalOffsetBias(normalBias);
 
                     ImGui::SeparatorText("PBR Material & Skybox");
                     float metallic = renderer.metallic();
@@ -675,9 +711,6 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     pbrChanged |= ImGui::SliderFloat("Roughness", &roughness, 0.04F, 1.0F);
                     pbrChanged |= ImGui::SliderFloat("AO", &ao, 0.0F, 1.0F);
                     if (pbrChanged) renderer.setPbrMaterial(metallic, roughness, ao);
-                    bool skyboxEnabled = renderer.skyboxEnabled();
-                    if (ImGui::Checkbox("Enable Skybox", &skyboxEnabled)) renderer.setSkyboxEnabled(skyboxEnabled);
-
                     ImGui::SeparatorText("Particles & Audio");
                     if (ImGui::Button("Test particle burst")) (void)renderer.spawnParticleBurst({0.0F, -0.2F, 0.0F});
                     ImGui::SameLine();

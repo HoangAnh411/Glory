@@ -22,16 +22,38 @@ void main(){
 )glsl";
 constexpr std::string_view skyboxFragmentSource = R"glsl(#version 450 core
 in vec3 vDirection;
-uniform samplerCube u_EnvironmentMap;
 uniform bool u_EncodeSrgb;
+uniform vec3 u_SunDirection;
+uniform int u_SkyPreset;
 out vec4 fragmentColor;
 vec3 linearToSrgb(vec3 value){
     vec3 low=value*12.92;
     vec3 high=1.055*pow(max(value,vec3(0.0)),vec3(1.0/2.4))-0.055;
     return mix(high,low,lessThanEqual(value,vec3(0.0031308)));
 }
+vec3 srgbToLinear(vec3 value){
+    vec3 low=value/12.92;
+    vec3 high=pow((value+0.055)/1.055,vec3(2.4));
+    return mix(high,low,lessThanEqual(value,vec3(0.04045)));
+}
 void main(){
-    vec3 color=texture(u_EnvironmentMap,normalize(vDirection)).rgb;
+    vec3 dir=normalize(vDirection);
+    float horizon=1.0-smoothstep(-0.18,0.46,dir.y);
+    float horizonBand=exp(-pow((dir.y-0.015)*7.0,2.0));
+    vec3 zenith=vec3(0.12,0.16,0.38);
+    vec3 horizonColor=vec3(0.94,0.36,0.20);
+    vec3 midColor=vec3(0.88,0.29,0.32);
+    if(u_SkyPreset==1){zenith=vec3(0.16,0.20,0.42);horizonColor=vec3(0.98,0.58,0.48);midColor=vec3(0.65,0.38,0.62);}
+    else if(u_SkyPreset==2){zenith=vec3(0.12,0.36,0.68);horizonColor=vec3(0.78,0.84,0.91);midColor=vec3(0.34,0.58,0.82);}
+    else if(u_SkyPreset==3){zenith=vec3(0.12,0.38,0.75);horizonColor=vec3(0.55,0.62,0.70);midColor=horizonColor;}
+    vec3 color=mix(zenith,horizonColor,horizon);
+    color=mix(color,midColor,exp(-pow((dir.y-0.25)*3.5,2.0))*0.52);
+    float sunDot=max(dot(dir,normalize(u_SunDirection)),0.0);
+    float glow=exp(-max(0.0,1.0-sunDot)*32.0)*(0.2+0.8*horizonBand);
+    float disc=pow(clamp((sunDot-0.996)/0.004,0.0,1.0),0.45);
+    color+=vec3(0.72,0.30,0.10)*glow;
+    color=mix(color,vec3(1.0,0.82,0.55),disc);
+    color=srgbToLinear(color);
     if(u_EncodeSrgb) color=linearToSrgb(color);
     fragmentColor=vec4(color,1.0);
 }
@@ -119,10 +141,11 @@ Skybox::Skybox(GlApi& gl) : gl_(gl), shader_(gl_, skyboxVertexSource, skyboxFrag
         gl_.vertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * static_cast<GLsizei>(sizeof(float)), nullptr);
         gl_.bindVertexArray(0);
         shader_.use();
-        cubemapLocation_ = gl_.getUniformLocation(shader_.program(), "u_EnvironmentMap");
         encodeSrgbLocation_ = gl_.getUniformLocation(shader_.program(), "u_EncodeSrgb");
-        if (cubemapLocation_ < 0 || encodeSrgbLocation_ < 0) throw std::runtime_error("Skybox uniforms were not found");
-        gl_.uniform1i(cubemapLocation_, 2);
+        sunDirectionLocation_ = gl_.getUniformLocation(shader_.program(), "u_SunDirection");
+        presetLocation_ = gl_.getUniformLocation(shader_.program(), "u_SkyPreset");
+        if (encodeSrgbLocation_ < 0 || sunDirectionLocation_ < 0 || presetLocation_ < 0)
+            throw std::runtime_error("Skybox uniforms were not found");
     } catch (...) {
         if (vertexBuffer_ != 0) gl_.deleteBuffers(1, &vertexBuffer_);
         if (vertexArray_ != 0) gl_.deleteVertexArrays(1, &vertexArray_);
@@ -138,11 +161,14 @@ Skybox::~Skybox() {
     if (cubemap_ != 0) gl_.deleteTextures(1, &cubemap_);
 }
 
-void Skybox::draw(const glm::mat4& view, const glm::mat4& projection, bool encodeSrgb) const noexcept {
+void Skybox::draw(const glm::mat4& view, const glm::mat4& projection, bool encodeSrgb,
+    const glm::vec3& lightDirection, int preset) const noexcept {
     const glm::mat4 viewNoTranslation{glm::mat3(view)};
     shader_.use();
     shader_.setViewProjection(projection * viewNoTranslation);
     gl_.uniform1i(encodeSrgbLocation_, encodeSrgb ? 1 : 0);
+    gl_.uniform3f(sunDirectionLocation_, -lightDirection.x, -lightDirection.y, -lightDirection.z);
+    gl_.uniform1i(presetLocation_, preset);
     gl_.activeTexture(GL_TEXTURE2);
     gl_.bindTexture(GL_TEXTURE_CUBE_MAP, cubemap_);
     gl_.depthFunc(GL_LEQUAL);
