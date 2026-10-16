@@ -144,6 +144,7 @@ vec3 evaluateSkyColor(vec3 direction){
     if(u_SkyPreset==1){zenith=vec3(0.16,0.20,0.42);horizonColor=vec3(0.98,0.58,0.48);midColor=vec3(0.65,0.38,0.62);}
     else if(u_SkyPreset==2){zenith=vec3(0.12,0.36,0.68);horizonColor=vec3(0.78,0.84,0.91);midColor=vec3(0.34,0.58,0.82);}
     else if(u_SkyPreset==3){zenith=vec3(0.12,0.38,0.75);horizonColor=vec3(0.55,0.62,0.70);midColor=horizonColor;}
+    else if(u_SkyPreset==4){zenith=vec3(0.16,0.25,0.40);horizonColor=vec3(0.66,0.69,0.72);midColor=vec3(0.40,0.52,0.64);}
     vec3 sky=mix(zenith,horizonColor,horizon);
     sky=mix(sky,midColor,exp(-pow((direction.y-0.25)*3.5,2.0))*0.52);
     float sun= max(dot(direction,normalize(-u_LightDirection)),0.0);

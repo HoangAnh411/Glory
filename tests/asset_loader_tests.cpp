@@ -3,9 +3,11 @@
 #include "glory/engine/color_space.hpp"
 
 #include <filesystem>
+#include <fstream>
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 int main() {
     const std::filesystem::path root = GLORY_ASSET_DIR;
@@ -24,6 +26,24 @@ int main() {
             asset.vertices.front().weights[0] + asset.vertices.front().weights[1] < 0.99F) {
             throw std::runtime_error("sample glTF mesh/texture/skin/animation extraction is incorrect");
         }
+        const auto sourcePath = root / "models" / "starter_crate.gltf";
+        const auto linearFixturePath = root / "models" / "starter_crate_linear_color_test.gltf";
+        {
+            std::ifstream source(sourcePath, std::ios::binary);
+            std::string json((std::istreambuf_iterator<char>(source)), std::istreambuf_iterator<char>());
+            const std::string insertion = "\"baseColorFactor\":[0.5,0.25,0.75,1.0],";
+            const std::size_t position = json.find("\"baseColorTexture\"");
+            if (position == std::string::npos) throw std::runtime_error("test glTF has no base color texture property");
+            json.insert(position, insertion);
+            std::ofstream fixture(linearFixturePath, std::ios::binary);
+            fixture << json;
+        }
+        const auto linearFixture = glory::engine::loadGltfAsset(linearFixturePath);
+        std::filesystem::remove(linearFixturePath);
+        if (std::abs(linearFixture.baseColorFactor[0] - 0.5F) > 1.0e-5F ||
+            std::abs(linearFixture.baseColorFactor[1] - 0.25F) > 1.0e-5F ||
+            std::abs(linearFixture.baseColorFactor[2] - 0.75F) > 1.0e-5F)
+            throw std::runtime_error("glTF linear base color factor must not be sRGB-decoded");
         const auto staticAsset = glory::engine::loadGltfAsset(root / "models" / "static_crate.gltf");
         if (staticAsset.hasSkin || !staticAsset.animations.empty() || staticAsset.vertices.front().weights[0] != 1.0F) {
             throw std::runtime_error("static glTF fallback data is incorrect");

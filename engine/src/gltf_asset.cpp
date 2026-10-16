@@ -1,5 +1,4 @@
 #include "glory/engine/gltf_asset.hpp"
-#include "glory/engine/color_space.hpp"
 
 #include <cgltf.h>
 
@@ -205,8 +204,6 @@ GltfAsset loadGltfAsset(const std::filesystem::path& path) {
         if (colors != nullptr) {
             if (!cgltf_accessor_read_float(colors, i, vertex.color, colors->type == cgltf_type_vec4 ? 4 : 3))
                 throw std::runtime_error("Invalid COLOR_0 accessor");
-            for (std::size_t channel = 0; channel < 3; ++channel)
-                vertex.color[channel] = srgbToLinear(vertex.color[channel]);
         }
     }
 
@@ -269,10 +266,8 @@ GltfAsset loadGltfAsset(const std::filesystem::path& path) {
         asset.ambientOcclusion = material.occlusion_texture.texture != nullptr
             ? std::clamp(material.occlusion_texture.scale, 0.0F, 1.0F) : 1.0F;
         for (std::size_t channel = 0; channel < 4; ++channel) asset.baseColorFactor[channel] = pbr.base_color_factor[channel];
-        for (std::size_t channel = 0; channel < 3; ++channel) {
-            asset.baseColorFactor[channel] = srgbToLinear(asset.baseColorFactor[channel]);
-            asset.emissiveFactor[channel] = srgbToLinear(material.emissive_factor[channel]);
-        }
+        for (std::size_t channel = 0; channel < 3; ++channel)
+            asset.emissiveFactor[channel] = material.emissive_factor[channel];
     }
     const cgltf_texture* texture = primitive.material != nullptr ? primitive.material->pbr_metallic_roughness.base_color_texture.texture : nullptr;
     if (texture != nullptr && texture->image != nullptr) {

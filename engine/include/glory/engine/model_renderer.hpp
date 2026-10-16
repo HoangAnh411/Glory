@@ -65,7 +65,7 @@ public:
     [[nodiscard]] bool fogEnabled() const noexcept { return fogEnabled_; }
     void setFogDensity(float density) noexcept;
     [[nodiscard]] float fogDensity() const noexcept { return fogDensity_; }
-    void setSkyPreset(int preset) noexcept { skyPreset_ = std::clamp(preset, 0, 3); }
+    void setSkyPreset(int preset) noexcept { skyPreset_ = std::clamp(preset, 0, 4); }
     [[nodiscard]] int skyPreset() const noexcept { return skyPreset_; }
     void setHemisphereEnabled(bool enabled) noexcept { hemisphereEnabled_ = enabled; }
     [[nodiscard]] bool hemisphereEnabled() const noexcept { return hemisphereEnabled_; }
@@ -112,8 +112,8 @@ private:
     bool characterLightingEnabled_ = true;
     bool fogEnabled_ = true;
     bool hemisphereEnabled_ = true;
-    float fogDensity_ = 0.008F;
-    int skyPreset_ = 0;
+    float fogDensity_ = 0.004F;
+    int skyPreset_ = 4;
     float shadowBias_ = 0.005F;
     float normalOffsetBias_ = 0.015F;
     int cascadeCount_ = 4;

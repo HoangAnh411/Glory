@@ -642,13 +642,13 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                         renderer.setLightingDebugView(lightingView);
                     bool shadowsEnabled = renderer.shadowsEnabled();
                     if (ImGui::Checkbox("Enable Shadow", &shadowsEnabled)) renderer.setShadowsEnabled(shadowsEnabled);
-                    static int lightingPreset = 0;
-                    static const char* presetNames[] = {"Sunset", "Sunrise", "Noon", "Old"};
-                    if (ImGui::Combo("Lighting preset", &lightingPreset, presetNames, 4)) {
+                    static int lightingPreset = 4;
+                    static const char* presetNames[] = {"Sunset", "Sunrise", "Noon", "Old", "Neutral"};
+                    if (ImGui::Combo("Lighting preset", &lightingPreset, presetNames, 5)) {
                         switch (lightingPreset) {
                         case 0:
-                            light.direction = {-0.612F, -0.5F, -0.612F}; light.color = {1.0F, 0.68F, 0.42F};
-                            light.ambientStrength = 0.72F; light.diffuseStrength = 1.35F;
+                            light.direction = {-0.612F, -0.5F, -0.612F}; light.color = {1.0F, 0.88F, 0.72F};
+                            light.ambientStrength = 0.8F; light.diffuseStrength = 0.88F;
                             renderer.setSkyPreset(0); renderer.setFogDensity(0.008F); renderer.setCascadeCount(4); renderer.setShadowFar(100.0F);
                             renderer.setCascadeLambda(0.65F); renderer.setPcfSamples(16); renderPipeline.shadowMap().setResolution(2048); break;
                         case 1:
@@ -661,6 +661,11 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                             light.ambientStrength = 0.9F; light.diffuseStrength = 1.0F;
                             renderer.setSkyPreset(2); renderer.setFogDensity(0.003F); renderer.setCascadeCount(3); renderer.setShadowFar(75.0F);
                             renderer.setCascadeLambda(0.45F); renderer.setPcfSamples(8); renderPipeline.shadowMap().setResolution(1024); break;
+                        case 4:
+                            light.direction = {-0.45F, -0.72F, -0.52F}; light.color = {1.0F, 0.95F, 0.88F};
+                            light.ambientStrength = 0.82F; light.diffuseStrength = 0.9F;
+                            renderer.setSkyPreset(4); renderer.setFogDensity(0.004F); renderer.setCascadeCount(3); renderer.setShadowFar(80.0F);
+                            renderer.setCascadeLambda(0.55F); renderer.setPcfSamples(8); renderPipeline.shadowMap().setResolution(2048); break;
                         default:
                             light.direction = {0.25F, -0.85F, 0.45F}; light.color = {1.0F, 0.96F, 0.90F};
                             light.ambientStrength = 0.55F; light.diffuseStrength = 0.95F;

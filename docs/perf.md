@@ -59,6 +59,10 @@ This is a smoke measurement, not a before/after visual diagnosis. No screenshot 
 
 Camera-collision iteration smoke on the same RTX 3050 Ti Laptop GPU at 1920x1080 measured 1.488 ms total GPU frame (shadow cascades 0.111/0.141/0.127/0.051 ms; boss/remote 0.006 ms; scene 0.907 ms; sky 0.011 ms; particle/overlay 0.001 ms; tonemap 0.065 ms). Timing variance is expected between short smoke runs.
 
+Neutral-color iteration smoke on the same GPU at 1920x1080 measured 2.309 ms total GPU frame (shadow cascades 0.101/0.147/0.131/0.263 ms; boss/remote 0.006 ms; scene 1.477 ms; sky 0.010 ms; particle/overlay 0.001 ms; tonemap 0.067 ms). This remains below the 3 ms target for the smoke scene.
+
+After adding the linear-factor regression fixture, a repeat smoke measured 1.617 ms total (cascades 0.076/0.115/0.123/0.080 ms; boss/remote 0.006 ms; scene 1.077 ms; sky 0.002 ms; particle/overlay 0.001 ms; tonemap 0.051 ms). Short-run GPU averages vary; both runs were below 3 ms.
+
 ## A3c Shared CSM High Smoke
 
 - Date: 2026-10-16
