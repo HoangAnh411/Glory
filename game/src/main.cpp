@@ -19,11 +19,13 @@
 #include <charconv>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 namespace {
 
@@ -210,8 +212,14 @@ glory::game::WorldEncounter fromWorldEditorData(const std::vector<WorldEditorSpa
 
 int main(int argc, char* argv[]) {
     glory::engine::ApplicationConfig config;
-    config.modelPath = std::filesystem::path(GLORY_ASSET_DIR) / "models" / "starter_crate.gltf";
-    config.bossModelPath = std::filesystem::path(GLORY_ASSET_DIR) / "models" / "static_crate.gltf";
+    const auto warriorModelPath = std::filesystem::path(GLORY_ASSET_DIR) / "models" / "hero_warrior.gltf";
+    config.modelPath = std::filesystem::exists(warriorModelPath)
+        ? warriorModelPath
+        : std::filesystem::path(GLORY_ASSET_DIR) / "models" / "starter_crate.gltf";
+    const auto bossModelPath = std::filesystem::path(GLORY_ASSET_DIR) / "models" / "boss_gorgon.gltf";
+    config.bossModelPath = std::filesystem::exists(bossModelPath)
+        ? bossModelPath
+        : std::filesystem::path(GLORY_ASSET_DIR) / "models" / "static_crate.gltf";
     config.audioDirectory = std::filesystem::path(GLORY_ASSET_DIR) / "audio";
     config.skillsPath = std::filesystem::path(GLORY_ASSET_DIR) / "data" / "skills.json";
     config.worldSpawnsPath = std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_spawns.json";
@@ -255,6 +263,10 @@ int main(int argc, char* argv[]) {
             std::cerr << "Usage: glory_client [--smoke-test] [--connect IPv4:port]\n";
             return 2;
         }
+    }
+
+    if (connectHost.empty()) {
+        accountPanel.authenticated = true;
     }
 
     std::unique_ptr<glory::network::NetworkContext> networkContext;
@@ -523,6 +535,41 @@ int main(int argc, char* argv[]) {
         bossEncounterActive = false;
     };
     applyWorldSpawns();
+
+    const auto worldMapPath = std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_map.json";
+    if (std::filesystem::exists(worldMapPath)) {
+        try {
+            std::ifstream file(worldMapPath);
+            nlohmann::json root;
+            file >> root;
+            if (root.contains("props") && root["props"].is_array()) {
+                for (const auto& item : root["props"]) {
+                    glm::vec3 pos{0.0F};
+                    if (item.contains("position") && item["position"].is_array() && item["position"].size() >= 3) {
+                        pos = {item["position"][0].get<float>(), item["position"][1].get<float>(), item["position"][2].get<float>()};
+                    }
+                    if (item.contains("collision") && item["collision"].is_array() && item["collision"].size() >= 6) {
+                        const auto& c = item["collision"];
+                        glory::game::Aabb aabb;
+                        aabb.minimum = pos + glm::vec3{c[0].get<float>(), c[1].get<float>(), c[2].get<float>()};
+                        aabb.maximum = pos + glm::vec3{c[3].get<float>(), c[4].get<float>(), c[5].get<float>()};
+                        controller.addObstacle(aabb);
+                    }
+                    if (item.contains("multi_collision") && item["multi_collision"].is_array()) {
+                        for (const auto& c : item["multi_collision"]) {
+                            if (c.is_array() && c.size() >= 6) {
+                                glory::game::Aabb aabb;
+                                aabb.minimum = pos + glm::vec3{c[0].get<float>(), c[1].get<float>(), c[2].get<float>()};
+                                aabb.maximum = pos + glm::vec3{c[3].get<float>(), c[4].get<float>(), c[5].get<float>()};
+                                controller.addObstacle(aabb);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (...) {
+        }
+    }
     config.saveSkills = [&](const std::vector<SkillEditorSkill>& skills, std::string& error) {
         try {
             auto updated = fromEditorSkills(skills);
@@ -989,7 +1036,7 @@ int main(int argc, char* argv[]) {
                 if ((networkTick % 60) == 0) networkClient->sendPing();
             }
             ++networkTick;
-            if (networkClient->state() != glory::network::ConnectionState::Disconnected) {
+            if (networkClient->state() == glory::network::ConnectionState::Connected && accountPanel.authenticated) {
                 glory::engine::PlayerFrameState networkFrame;
                 networkFrame.networkConnected =
                     networkClient->state() == glory::network::ConnectionState::Connected;
@@ -1101,15 +1148,33 @@ int main(int argc, char* argv[]) {
             if (triggerEvent.type == glory::game::TriggerType::HazardArea)
                 playerHealth = std::max(0.0F, playerHealth - 10.0F);
         }
-        if (!requestedSkillId.empty()) combat.requestSkill(requestedSkillId);
+        if (boss.currentHp() < boss.maxHp()) bossEncounterActive = true;
+        if (state.position.z >= 16.0F) {
+            zonePanel.currentZone = "Thành Trấn Khởi Nguyên (Sanctuary Citadel)";
+        } else if (state.position.z >= -25.0F) {
+            zonePanel.currentZone = "Vùng Dã Ngoại (Outer Wilds)";
+        } else {
+            zonePanel.currentZone = "Phế Tích Cấm Địa (Ruins of Desolation)";
+        }
+        std::string effectiveSkillId = requestedSkillId;
+        const auto& availableSkills = combat.skillStatuses();
+        if (actionMap.state(glory::game::Action::Skill1).pressed && !availableSkills.empty())
+            effectiveSkillId = availableSkills[0].id;
+        else if (actionMap.state(glory::game::Action::Skill2).pressed && availableSkills.size() > 1)
+            effectiveSkillId = availableSkills[1].id;
+        else if (actionMap.state(glory::game::Action::Skill3).pressed && availableSkills.size() > 2)
+            effectiveSkillId = availableSkills[2].id;
+        else if (actionMap.state(glory::game::Action::Skill4).pressed && availableSkills.size() > 3)
+            effectiveSkillId = availableSkills[3].id;
+        if (!effectiveSkillId.empty()) combat.requestSkill(effectiveSkillId);
         combat.dummy().hurtbox.base = boss.position();
         combat.dummy().currentHp = boss.currentHp();
         const bool moving = glm::length(glm::vec2(state.velocity.x, state.velocity.z)) > 1.0e-4F;
-        const bool wantsAttackAnimation = state.attackRequested || !requestedSkillId.empty() ||
+        const bool wantsAttackAnimation = state.attackRequested || !effectiveSkillId.empty() ||
             combat.animationState() == "Attack";
         const std::string requestedAnimation = wantsAttackAnimation ? "Attack" : (moving ? "Run" : "Idle");
         const bool attackPressed = actionMap.state(glory::game::Action::PrimaryAttack).pressed ||
-            state.attackRequested || !requestedSkillId.empty();
+            state.attackRequested || !effectiveSkillId.empty();
         combat.update(static_cast<float>(fixedDeltaSeconds), state.position, state.facingYaw,
             attackPressed, requestedAnimation,
             actionMap.state(glory::game::Action::Dodge).pressed, state.isDodging,
@@ -1185,6 +1250,8 @@ int main(int argc, char* argv[]) {
             frame.skills.push_back({skill.id, skill.name, skill.cooldownRemaining, skill.cooldownDuration});
         for (const auto& event : combat.hitEvents())
             frame.hitEvents.push_back({event.position, event.damage});
+        if (bossResult.playerDamage > 0.0F)
+            frame.hitEvents.push_back({state.position + glm::vec3(0.0F, 1.0F, 0.0F), -bossResult.playerDamage});
         return frame;
     });
 

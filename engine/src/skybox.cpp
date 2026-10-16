@@ -50,13 +50,20 @@ std::array<unsigned char, 4> skyColor(int face, int x, int y, int size) {
     const float u = 2.0F * (static_cast<float>(x) + 0.5F) / static_cast<float>(size) - 1.0F;
     const float v = 2.0F * (static_cast<float>(y) + 0.5F) / static_cast<float>(size) - 1.0F;
     const glm::vec3 direction = glm::normalize(faceDirection(face, u, v));
-    const float horizon = glm::smoothstep(-0.18F, 0.32F, direction.y);
-    const float cloud = std::clamp(std::sin(direction.x * 19.0F + direction.z * 13.0F) *
-        std::sin(direction.z * 23.0F - direction.y * 9.0F), 0.0F, 1.0F);
-    glm::vec3 color = glm::mix(glm::vec3(0.43F, 0.55F, 0.57F), glm::vec3(0.13F, 0.38F, 0.68F), horizon);
-    color = glm::mix(color, glm::vec3(0.78F, 0.84F, 0.86F), cloud * horizon * 0.18F);
-    return {static_cast<unsigned char>(color.r * 255.0F), static_cast<unsigned char>(color.g * 255.0F),
-        static_cast<unsigned char>(color.b * 255.0F), 255};
+    const float horizon = glm::smoothstep(-0.15F, 0.45F, direction.y);
+    const float sunsetGlow = glm::clamp(1.0F - std::abs(direction.y - 0.08F) * 4.0F, 0.0F, 1.0F);
+    const float cloud = std::clamp(std::sin(direction.x * 12.0F + direction.z * 9.0F) *
+        std::sin(direction.z * 15.0F - direction.y * 7.0F), 0.0F, 1.0F);
+    const glm::vec3 horizonColor = glm::mix(glm::vec3(0.55F, 0.62F, 0.70F), glm::vec3(0.88F, 0.68F, 0.45F), sunsetGlow * 0.7F);
+    const glm::vec3 zenithColor = glm::vec3(0.12F, 0.38F, 0.75F);
+    glm::vec3 color = glm::mix(horizonColor, zenithColor, horizon);
+    color = glm::mix(color, glm::vec3(0.92F, 0.88F, 0.82F), cloud * horizon * 0.25F);
+    return {
+        static_cast<unsigned char>(std::clamp(color.r * 255.0F, 0.0F, 255.0F)),
+        static_cast<unsigned char>(std::clamp(color.g * 255.0F, 0.0F, 255.0F)),
+        static_cast<unsigned char>(std::clamp(color.b * 255.0F, 0.0F, 255.0F)),
+        255
+    };
 }
 }
 

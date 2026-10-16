@@ -43,14 +43,37 @@ public:
 
     void update(const glm::vec3& target, float mouseDeltaX, float mouseDeltaY) noexcept {
         if (finite(target)) target_ = target;
-        if (std::isfinite(mouseDeltaX) && std::isfinite(mouseDeltaY)) {
-            yawDegrees_ = std::remainder(yawDegrees_ + mouseDeltaX * mouseSensitivity_, 360.0F);
-            pitchDegrees_ = std::clamp(pitchDegrees_ - mouseDeltaY * mouseSensitivity_,
-                minimumPitchDegrees, maximumPitchDegrees);
+        if (locked_ && finite(lockTarget_)) {
+            const glm::vec3 diff = lockTarget_ - target;
+            const float horizontalDist = std::sqrt(diff.x * diff.x + diff.z * diff.z);
+            if (horizontalDist > 0.1F) {
+                const float desiredYaw = glm::degrees(std::atan2(diff.z, diff.x));
+                const float yawDiff = std::remainder(desiredYaw - yawDegrees_, 360.0F);
+                yawDegrees_ = std::remainder(yawDegrees_ + yawDiff * 0.12F, 360.0F);
+
+                const float desiredPitch = glm::clamp(glm::degrees(std::atan2(diff.y, horizontalDist)) + 8.0F, 5.0F, 35.0F);
+                pitchDegrees_ += (desiredPitch - pitchDegrees_) * 0.12F;
+            }
+            if (std::isfinite(mouseDeltaY)) {
+                pitchDegrees_ = std::clamp(pitchDegrees_ - mouseDeltaY * (mouseSensitivity_ * 0.3F),
+                    minimumPitchDegrees, maximumPitchDegrees);
+            }
+        } else {
+            if (std::isfinite(mouseDeltaX) && std::isfinite(mouseDeltaY)) {
+                yawDegrees_ = std::remainder(yawDegrees_ + mouseDeltaX * mouseSensitivity_, 360.0F);
+                pitchDegrees_ = std::clamp(pitchDegrees_ - mouseDeltaY * mouseSensitivity_,
+                    minimumPitchDegrees, maximumPitchDegrees);
+            }
         }
     }
 
     void setTarget(const glm::vec3& target) noexcept { if (finite(target)) target_ = target; }
+    void setLocked(bool locked, const glm::vec3& lockTarget = glm::vec3(0.0F)) noexcept {
+        locked_ = locked;
+        if (finite(lockTarget)) lockTarget_ = lockTarget;
+    }
+    [[nodiscard]] bool isLocked() const noexcept { return locked_; }
+    [[nodiscard]] const glm::vec3& lockTarget() const noexcept { return lockTarget_; }
     void setAspectRatio(float aspectRatio) {
         if (!std::isfinite(aspectRatio) || aspectRatio <= 0.0F)
             throw std::invalid_argument("Camera aspect ratio must be positive and finite");
@@ -93,6 +116,8 @@ private:
     float nearPlane_;
     float farPlane_;
     float mouseSensitivity_;
+    bool locked_ = false;
+    glm::vec3 lockTarget_{0.0F};
 };
 
 } // namespace glory::engine

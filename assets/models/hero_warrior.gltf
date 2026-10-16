@@ -1,0 +1,571 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "Glory Humanoid Warrior Generator"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "WarriorMesh",
+      "mesh": 0,
+      "skin": 0
+    },
+    {
+      "name": "RootJoint",
+      "children": [
+        2,
+        6,
+        7
+      ],
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "TorsoJoint",
+      "children": [
+        3,
+        4,
+        5
+      ],
+      "translation": [
+        0.0,
+        0.75,
+        0.0
+      ]
+    },
+    {
+      "name": "HeadJoint",
+      "translation": [
+        0.0,
+        0.7,
+        0.0
+      ]
+    },
+    {
+      "name": "LeftArmJoint",
+      "translation": [
+        -0.35,
+        0.6,
+        0.0
+      ]
+    },
+    {
+      "name": "RightArmJoint",
+      "translation": [
+        0.35,
+        0.6,
+        0.0
+      ]
+    },
+    {
+      "name": "LeftLegJoint",
+      "translation": [
+        -0.14,
+        0.75,
+        0.0
+      ]
+    },
+    {
+      "name": "RightLegJoint",
+      "translation": [
+        0.14,
+        0.75,
+        0.0
+      ]
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Humanoid Warrior",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "JOINTS_0": 3,
+            "WEIGHTS_0": 4
+          },
+          "indices": 5,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "skins": [
+    {
+      "name": "Warrior Skeleton",
+      "inverseBindMatrices": 6,
+      "skeleton": 1,
+      "joints": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    }
+  ],
+  "animations": [
+    {
+      "name": "Idle",
+      "samplers": [
+        {
+          "input": 7,
+          "output": 10,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 7,
+          "output": 11,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 7,
+          "output": 12,
+          "interpolation": "LINEAR"
+        }
+      ],
+      "channels": [
+        {
+          "sampler": 0,
+          "target": {
+            "node": 2,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 1,
+          "target": {
+            "node": 5,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 2,
+          "target": {
+            "node": 4,
+            "path": "rotation"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Run",
+      "samplers": [
+        {
+          "input": 8,
+          "output": 13,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 8,
+          "output": 14,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 8,
+          "output": 15,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 8,
+          "output": 16,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 8,
+          "output": 17,
+          "interpolation": "LINEAR"
+        }
+      ],
+      "channels": [
+        {
+          "sampler": 0,
+          "target": {
+            "node": 6,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 1,
+          "target": {
+            "node": 7,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 2,
+          "target": {
+            "node": 4,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 3,
+          "target": {
+            "node": 5,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 4,
+          "target": {
+            "node": 2,
+            "path": "rotation"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attack",
+      "samplers": [
+        {
+          "input": 9,
+          "output": 18,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 9,
+          "output": 19,
+          "interpolation": "LINEAR"
+        }
+      ],
+      "channels": [
+        {
+          "sampler": 0,
+          "target": {
+            "node": 5,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 1,
+          "target": {
+            "node": 2,
+            "path": "rotation"
+          }
+        }
+      ],
+      "extras": {
+        "events": [
+          {
+            "time": 0.25,
+            "name": "hit_frame",
+            "parameters": {
+              "damage": "25"
+            }
+          },
+          {
+            "time": 0.15,
+            "name": "swing_sound"
+          }
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "metallicFactor": 0.55,
+        "roughnessFactor": 0.35,
+        "baseColorTexture": {
+          "index": 0
+        }
+      }
+    }
+  ],
+  "textures": [
+    {
+      "source": 0
+    }
+  ],
+  "images": [
+    {
+      "uri": "../textures/warrior_palette.png"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "hero_warrior.bin",
+      "byteLength": 25276
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 4896,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 4896,
+      "byteLength": 4896,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 9792,
+      "byteLength": 3264,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 13056,
+      "byteLength": 3264,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 16320,
+      "byteLength": 6528,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 22848,
+      "byteLength": 1224,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24072,
+      "byteLength": 448
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24520,
+      "byteLength": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24532,
+      "byteLength": 20
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24552,
+      "byteLength": 20
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24572,
+      "byteLength": 48
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24620,
+      "byteLength": 48
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24668,
+      "byteLength": 48
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24716,
+      "byteLength": 80
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24796,
+      "byteLength": 80
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24876,
+      "byteLength": 80
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24956,
+      "byteLength": 80
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 25036,
+      "byteLength": 80
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 25116,
+      "byteLength": 80
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 25196,
+      "byteLength": 80
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 408,
+      "type": "VEC3",
+      "min": [
+        -0.44,
+        0.0,
+        -0.18
+      ],
+      "max": [
+        0.5,
+        1.88,
+        0.22
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 408,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 408,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 408,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 408,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5123,
+      "count": 612,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5126,
+      "count": 7,
+      "type": "MAT4"
+    },
+    {
+      "bufferView": 7,
+      "componentType": 5126,
+      "count": 3,
+      "type": "SCALAR",
+      "min": [
+        0.0
+      ],
+      "max": [
+        1.5
+      ]
+    },
+    {
+      "bufferView": 8,
+      "componentType": 5126,
+      "count": 5,
+      "type": "SCALAR",
+      "min": [
+        0.0
+      ],
+      "max": [
+        1.0
+      ]
+    },
+    {
+      "bufferView": 9,
+      "componentType": 5126,
+      "count": 5,
+      "type": "SCALAR",
+      "min": [
+        0.0
+      ],
+      "max": [
+        0.8
+      ]
+    },
+    {
+      "bufferView": 10,
+      "componentType": 5126,
+      "count": 3,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 11,
+      "componentType": 5126,
+      "count": 3,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 12,
+      "componentType": 5126,
+      "count": 3,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 13,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 14,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 15,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 16,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 17,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 18,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 19,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    }
+  ]
+}

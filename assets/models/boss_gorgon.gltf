@@ -1,0 +1,502 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "Glory Boss Gorgon Generator"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "BossMesh",
+      "mesh": 0,
+      "skin": 0
+    },
+    {
+      "name": "RootJoint",
+      "children": [
+        2,
+        6,
+        7
+      ],
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "TorsoJoint",
+      "children": [
+        3,
+        4,
+        5
+      ],
+      "translation": [
+        0.0,
+        0.95,
+        0.0
+      ]
+    },
+    {
+      "name": "HeadJoint",
+      "translation": [
+        0.0,
+        0.9,
+        0.0
+      ]
+    },
+    {
+      "name": "LeftArmJoint",
+      "translation": [
+        -0.5,
+        0.75,
+        0.0
+      ]
+    },
+    {
+      "name": "RightArmJoint",
+      "translation": [
+        0.5,
+        0.75,
+        0.0
+      ]
+    },
+    {
+      "name": "LeftLegJoint",
+      "translation": [
+        -0.24,
+        0.95,
+        0.0
+      ]
+    },
+    {
+      "name": "RightLegJoint",
+      "translation": [
+        0.24,
+        0.95,
+        0.0
+      ]
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Boss Gorgon",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "JOINTS_0": 3,
+            "WEIGHTS_0": 4
+          },
+          "indices": 5,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "skins": [
+    {
+      "name": "Boss Skeleton",
+      "inverseBindMatrices": 6,
+      "skeleton": 1,
+      "joints": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    }
+  ],
+  "animations": [
+    {
+      "name": "Idle",
+      "samplers": [
+        {
+          "input": 7,
+          "output": 10,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 7,
+          "output": 11,
+          "interpolation": "LINEAR"
+        }
+      ],
+      "channels": [
+        {
+          "sampler": 0,
+          "target": {
+            "node": 2,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 1,
+          "target": {
+            "node": 5,
+            "path": "rotation"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Run",
+      "samplers": [
+        {
+          "input": 8,
+          "output": 12,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 8,
+          "output": 13,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 8,
+          "output": 14,
+          "interpolation": "LINEAR"
+        }
+      ],
+      "channels": [
+        {
+          "sampler": 0,
+          "target": {
+            "node": 6,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 1,
+          "target": {
+            "node": 7,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 2,
+          "target": {
+            "node": 5,
+            "path": "rotation"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attack",
+      "samplers": [
+        {
+          "input": 9,
+          "output": 15,
+          "interpolation": "LINEAR"
+        },
+        {
+          "input": 9,
+          "output": 16,
+          "interpolation": "LINEAR"
+        }
+      ],
+      "channels": [
+        {
+          "sampler": 0,
+          "target": {
+            "node": 5,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 1,
+          "target": {
+            "node": 2,
+            "path": "rotation"
+          }
+        }
+      ],
+      "extras": {
+        "events": [
+          {
+            "time": 0.55,
+            "name": "hit_frame",
+            "parameters": {
+              "damage": "40"
+            }
+          },
+          {
+            "time": 0.45,
+            "name": "swing_sound"
+          }
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "metallicFactor": 0.8,
+        "roughnessFactor": 0.4,
+        "baseColorTexture": {
+          "index": 0
+        }
+      }
+    }
+  ],
+  "textures": [
+    {
+      "source": 0
+    }
+  ],
+  "images": [
+    {
+      "uri": "../textures/boss_palette.png"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "boss_gorgon.bin",
+      "byteLength": 32148
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 6336,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 6336,
+      "byteLength": 6336,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 12672,
+      "byteLength": 4224,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 16896,
+      "byteLength": 4224,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 21120,
+      "byteLength": 8448,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 29568,
+      "byteLength": 1584,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 31152,
+      "byteLength": 448
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 31600,
+      "byteLength": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 31612,
+      "byteLength": 20
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 31632,
+      "byteLength": 20
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 31652,
+      "byteLength": 48
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 31700,
+      "byteLength": 48
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 31748,
+      "byteLength": 80
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 31828,
+      "byteLength": 80
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 31908,
+      "byteLength": 80
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 31988,
+      "byteLength": 80
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 32068,
+      "byteLength": 80
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 528,
+      "type": "VEC3",
+      "min": [
+        -0.72,
+        0.0,
+        -0.32
+      ],
+      "max": [
+        0.72,
+        2.55,
+        0.52
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 528,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 528,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 528,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 528,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5123,
+      "count": 792,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5126,
+      "count": 7,
+      "type": "MAT4"
+    },
+    {
+      "bufferView": 7,
+      "componentType": 5126,
+      "count": 3,
+      "type": "SCALAR",
+      "min": [
+        0.0
+      ],
+      "max": [
+        2.0
+      ]
+    },
+    {
+      "bufferView": 8,
+      "componentType": 5126,
+      "count": 5,
+      "type": "SCALAR",
+      "min": [
+        0.0
+      ],
+      "max": [
+        1.2
+      ]
+    },
+    {
+      "bufferView": 9,
+      "componentType": 5126,
+      "count": 5,
+      "type": "SCALAR",
+      "min": [
+        0.0
+      ],
+      "max": [
+        1.2
+      ]
+    },
+    {
+      "bufferView": 10,
+      "componentType": 5126,
+      "count": 3,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 11,
+      "componentType": 5126,
+      "count": 3,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 12,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 13,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 14,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 15,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 16,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    }
+  ]
+}

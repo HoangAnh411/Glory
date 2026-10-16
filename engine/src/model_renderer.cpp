@@ -2,14 +2,17 @@
 
 #include "glory/engine/shadow_math.hpp"
 #include "glory/engine/pbr_math.hpp"
+#include "glory/engine/image_loader.hpp"
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <string_view>
 #include <utility>
+#include <nlohmann/json.hpp>
 
 namespace glory::engine {
 namespace {
@@ -142,12 +145,22 @@ void main(){
     vec3 specular=ndf*geometry*fresnel/max(4.0*nDotV*nDotL,0.001);
     vec3 kD=(vec3(1.0)-fresnel)*(1.0-metallic);
     vec3 diffuse=kD*baseColor/PI;
-    vec3 environmentDiffuse=texture(u_EnvironmentMap,normal).rgb*baseColor*kD;
+    vec3 envSky=texture(u_EnvironmentMap,normal).rgb;
+    float envLuma=dot(envSky,vec3(0.299,0.587,0.114));
+    vec3 skyLight=mix(vec3(envLuma),envSky,0.25);
+    vec3 groundBounce=vec3(0.38,0.34,0.26);
+    float hemi=clamp(normal.y*0.5+0.5,0.0,1.0);
+    vec3 ambientDiffuseLight=mix(groundBounce,skyLight,hemi);
+    vec3 environmentDiffuse=ambientDiffuseLight*baseColor*kD;
     vec3 environmentSpecular=texture(u_EnvironmentMap,reflect(-viewDir,normal)).rgb*fresnel*(1.0-roughness);
     vec3 ambient=(environmentDiffuse+environmentSpecular)*u_AmbientStrength*u_AO;
     float shadow=calculateShadow(normal,lightDir);
     vec3 direct=(diffuse+specular)*u_LightColor*u_DiffuseStrength*nDotL;
-    fragmentColor=vec4(ambient+(1.0-shadow)*direct,baseSample.a);
+    vec3 litColor=ambient+(1.0-shadow)*direct;
+    float dist=length(u_ViewPosition-vFragPos);
+    float fogFactor=clamp((dist-48.0)/65.0,0.0,0.85);
+    vec3 fogColor=vec3(0.68,0.62,0.55);
+    fragmentColor=vec4(mix(litColor,fogColor,fogFactor),baseSample.a);
 }
 )glsl";
 
@@ -165,13 +178,56 @@ ModelRenderer::ModelRenderer(const std::filesystem::path& path)
     shader_.setTextureUnit(0);
     shader_.setShadowMapUnit(1);
     shader_.setEnvironmentMapUnit(2);
+    const auto worldGroundPath = path.parent_path().parent_path() / "textures" / "world_ground.png";
+    const auto floorTexPath = std::filesystem::exists(worldGroundPath) ? worldGroundPath :
+        path.parent_path().parent_path() / "textures" / "arena_floor.png";
+    if (std::filesystem::exists(floorTexPath)) {
+        try {
+            arenaFloorTexture_ = std::make_unique<Texture2D>(gl_, loadImage(floorTexPath));
+        } catch (...) {
+            arenaFloorTexture_.reset();
+        }
+    }
+
+    const auto worldMapPath = path.parent_path().parent_path() / "data" / "world_map.json";
+    if (std::filesystem::exists(worldMapPath)) {
+        try {
+            std::ifstream file(worldMapPath);
+            nlohmann::json root;
+            file >> root;
+            if (root.contains("props") && root["props"].is_array()) {
+                const auto modelsDir = path.parent_path();
+                for (const auto& item : root["props"]) {
+                    StaticWorldProp prop;
+                    prop.type = item.value("type", "");
+                    if (item.contains("position") && item["position"].is_array() && item["position"].size() >= 3) {
+                        prop.position = {item["position"][0].get<float>(), item["position"][1].get<float>(), item["position"][2].get<float>()};
+                    }
+                    prop.yaw = item.value("yaw", 0.0F);
+                    prop.scale = item.value("scale", 1.0F);
+                    staticProps_.push_back(prop);
+
+                    if (!prop.type.empty() && !propModelTemplates_.contains(prop.type)) {
+                        const auto propModelPath = modelsDir / (prop.type + ".gltf");
+                        if (std::filesystem::exists(propModelPath)) {
+                            try {
+                                propModelTemplates_[prop.type] = std::make_unique<Model>(gl_, propModelPath);
+                            } catch (...) {
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (...) {
+        }
+    }
 }
 
 void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPosition,
     const DirectionalLight& light, int width, int height) const {
     if (width <= 0 || height <= 0) return;
     const glm::mat4 lightSpace = calculateLightSpaceMatrix(
-        light.direction, glm::vec3(0.0F), glm::vec2(16.0F), 0.1F, 50.0F);
+        light.direction, glm::vec3(0.0F), glm::vec2(28.0F), 0.1F, 80.0F);
     const std::vector<glm::mat4> palette = model_.skinPalette();
 
     if (shadowsEnabled_) {
@@ -185,6 +241,17 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
         groundPlane_.draw();
         depthShader_.setModelMatrix(modelTransform_);
         model_.draw();
+        for (const auto& prop : staticProps_) {
+            auto it = propModelTemplates_.find(prop.type);
+            if (it != propModelTemplates_.end() && it->second) {
+                glm::mat4 m = glm::translate(glm::mat4(1.0F), prop.position) *
+                    glm::rotate(glm::mat4(1.0F), glm::radians(prop.yaw), glm::vec3(0.0F, 1.0F, 0.0F)) *
+                    glm::scale(glm::mat4(1.0F), glm::vec3(prop.scale));
+                depthShader_.setModelMatrix(m);
+                depthShader_.setSkinPalette({}, false);
+                it->second->draw();
+            }
+        }
     }
 
     ShadowMap::bindDefaultFramebuffer(gl_);
@@ -203,10 +270,34 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
     shader_.setShadowSettings(shadowsEnabled_, shadowBias_);
     shader_.setPbrMaterial(metallic_, roughness_, ambientOcclusion_);
     shader_.setSkinPalette({}, false);
-    shader_.setBaseColor({0.25F, 0.29F, 0.31F});
-    shader_.setBaseColorFactor({1.0F, 1.0F, 1.0F});
-    shader_.setPbrMaterial(0.0F, 0.9F, 1.0F);
+    if (arenaFloorTexture_) {
+        shader_.useTexture(true);
+        arenaFloorTexture_->bind(0);
+        shader_.setBaseColor({1.0F, 1.0F, 1.0F});
+        shader_.setBaseColorFactor({1.0F, 1.0F, 1.0F});
+        shader_.setPbrMaterial(0.1F, 0.7F, 1.0F);
+    } else {
+        shader_.useTexture(false);
+        shader_.setBaseColor({0.36F, 0.40F, 0.44F});
+        shader_.setBaseColorFactor({1.0F, 1.0F, 1.0F});
+        shader_.setPbrMaterial(0.05F, 0.75F, 1.0F);
+    }
     groundPlane_.draw();
+
+    for (const auto& prop : staticProps_) {
+        auto it = propModelTemplates_.find(prop.type);
+        if (it != propModelTemplates_.end() && it->second) {
+            glm::mat4 m = glm::translate(glm::mat4(1.0F), prop.position) *
+                glm::rotate(glm::mat4(1.0F), glm::radians(prop.yaw), glm::vec3(0.0F, 1.0F, 0.0F)) *
+                glm::scale(glm::mat4(1.0F), glm::vec3(prop.scale));
+            shader_.setModelMatrix(m);
+            shader_.setSkinPalette({}, false);
+            shader_.setBaseColorFactor(it->second->baseColorFactor());
+            shader_.setPbrMaterial(it->second->metallicFactor(), it->second->roughnessFactor(), it->second->ambientOcclusion());
+            it->second->bindTexture(0);
+            it->second->draw();
+        }
+    }
 
     shader_.useTexture(true);
     shader_.setBaseColorFactor(model_.baseColorFactor());

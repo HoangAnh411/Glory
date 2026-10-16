@@ -297,6 +297,8 @@ struct PlayerFrameState {
     std::vector<SkillDebugState> skills;
     std::string className;
     std::vector<CombatHitVisualEvent> hitEvents;
+    bool targetLocked = false;
+    glm::vec3 targetLockPosition{0.0F};
     std::vector<std::string> activeTriggerStates;
     glm::vec3 practiceDummyPosition{0.0F};
     float practiceDummyYaw = 0.0F;

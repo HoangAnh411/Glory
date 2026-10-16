@@ -25,6 +25,11 @@ input::Control translateKey(SDL_Scancode key) noexcept {
     case SDL_SCANCODE_DOWN: return input::Control::KeyDown;
     case SDL_SCANCODE_LEFT: return input::Control::KeyLeft;
     case SDL_SCANCODE_RIGHT: return input::Control::KeyRight;
+    case SDL_SCANCODE_1: return input::Control::Key1;
+    case SDL_SCANCODE_2: return input::Control::Key2;
+    case SDL_SCANCODE_3: return input::Control::Key3;
+    case SDL_SCANCODE_4: return input::Control::Key4;
+    case SDL_SCANCODE_TAB: return input::Control::KeyTab;
     default: return input::Control::Unknown;
     }
 }

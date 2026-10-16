@@ -13,14 +13,15 @@ struct GroundVertex {
     float texCoord[2];
 };
 
-constexpr float floorY = -0.72F;
+constexpr float floorY = 0.0F;
+constexpr float halfExtent = 120.0F;
 constexpr std::array<GroundVertex, 6> vertices{{
-    {{-10.0F, floorY, -10.0F}, {0.0F, 1.0F, 0.0F}, {0.0F, 0.0F}},
-    {{ 10.0F, floorY,  10.0F}, {0.0F, 1.0F, 0.0F}, {8.0F, 8.0F}},
-    {{ 10.0F, floorY, -10.0F}, {0.0F, 1.0F, 0.0F}, {8.0F, 0.0F}},
-    {{-10.0F, floorY, -10.0F}, {0.0F, 1.0F, 0.0F}, {0.0F, 0.0F}},
-    {{-10.0F, floorY,  10.0F}, {0.0F, 1.0F, 0.0F}, {0.0F, 8.0F}},
-    {{ 10.0F, floorY,  10.0F}, {0.0F, 1.0F, 0.0F}, {8.0F, 8.0F}},
+    {{-halfExtent, floorY, -halfExtent}, {0.0F, 1.0F, 0.0F}, { 0.0F, 1.0F}},
+    {{ halfExtent, floorY,  halfExtent}, {0.0F, 1.0F, 0.0F}, { 1.0F, 0.0F}},
+    {{ halfExtent, floorY, -halfExtent}, {0.0F, 1.0F, 0.0F}, { 1.0F, 1.0F}},
+    {{-halfExtent, floorY, -halfExtent}, {0.0F, 1.0F, 0.0F}, { 0.0F, 1.0F}},
+    {{-halfExtent, floorY,  halfExtent}, {0.0F, 1.0F, 0.0F}, { 0.0F, 0.0F}},
+    {{ halfExtent, floorY,  halfExtent}, {0.0F, 1.0F, 0.0F}, { 1.0F, 0.0F}},
 }};
 
 } // namespace

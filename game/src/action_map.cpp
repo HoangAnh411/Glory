@@ -26,6 +26,11 @@ ActionMap::ActionMap() noexcept {
     (void)bind(Action::PrimaryAttack, input::Control::MouseLeft);
     (void)bind(Action::SecondaryAttack, input::Control::MouseRight);
     (void)bind(Action::Interact, input::Control::KeyE);
+    (void)bind(Action::Skill1, input::Control::Key1);
+    (void)bind(Action::Skill2, input::Control::Key2);
+    (void)bind(Action::Skill3, input::Control::Key3);
+    (void)bind(Action::Skill4, input::Control::Key4);
+    (void)bind(Action::TargetLock, input::Control::KeyTab);
 }
 
 bool ActionMap::bind(Action action, input::Control control) noexcept {

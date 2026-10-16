@@ -17,6 +17,11 @@ enum class Action : std::size_t {
     PrimaryAttack,
     SecondaryAttack,
     Interact,
+    Skill1,
+    Skill2,
+    Skill3,
+    Skill4,
+    TargetLock,
     Count,
 };
 

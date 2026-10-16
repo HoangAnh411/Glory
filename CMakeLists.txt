@@ -182,7 +182,7 @@ target_include_directories(glory_engine
     PRIVATE ${stb_SOURCE_DIR} ${cgltf_SOURCE_DIR} ${miniaudio_SOURCE_DIR}
 )
 target_compile_features(glory_engine PUBLIC cxx_std_20)
-target_link_libraries(glory_engine PUBLIC SDL3::SDL3-static OpenGL::GL glm::glm PRIVATE glory_imgui)
+target_link_libraries(glory_engine PUBLIC SDL3::SDL3-static OpenGL::GL glm::glm nlohmann_json::nlohmann_json PRIVATE glory_imgui)
 
 add_executable(glory_client game/src/main.cpp)
 target_compile_definitions(glory_client PRIVATE GLORY_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets")
@@ -435,4 +435,9 @@ if(BUILD_TESTING)
     target_link_libraries(glory_closed_beta_feedback_tests PRIVATE glory_db glory_network glory_sqlite nlohmann_json::nlohmann_json)
     target_compile_features(glory_closed_beta_feedback_tests PRIVATE cxx_std_20)
     add_test(NAME glory_closed_beta_feedback COMMAND glory_closed_beta_feedback_tests)
+
+    add_executable(glory_game_hud_tests tests/test_game_hud.cpp)
+    target_link_libraries(glory_game_hud_tests PRIVATE glory_engine glory_game)
+    target_compile_features(glory_game_hud_tests PRIVATE cxx_std_20)
+    add_test(NAME glory_game_hud COMMAND glory_game_hud_tests)
 endif()

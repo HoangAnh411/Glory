@@ -1,0 +1,126 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "Glory Novice Village Generator"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "house_town_inn",
+      "mesh": 0
+    }
+  ],
+  "meshes": [
+    {
+      "name": "house_town_inn_Mesh",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "Mat_house_town_inn",
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicFactor": 0.05,
+        "roughnessFactor": 0.85
+      }
+    }
+  ],
+  "textures": [
+    {
+      "source": 0
+    }
+  ],
+  "images": [
+    {
+      "uri": "../textures/novice_village_palette.png"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "house_town_inn.bin",
+      "byteLength": 24920
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 8544,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 8544,
+      "byteLength": 8544,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 17088,
+      "byteLength": 5696,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 22784,
+      "byteLength": 2136,
+      "target": 34963
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 712,
+      "type": "VEC3",
+      "min": [
+        -5.2,
+        0.0,
+        -6.2
+      ],
+      "max": [
+        5.2,
+        9.6,
+        7.2
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 712,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 712,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 1068,
+      "type": "SCALAR"
+    }
+  ]
+}

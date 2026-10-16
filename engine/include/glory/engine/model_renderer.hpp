@@ -8,11 +8,22 @@
 #include "glory/engine/skybox.hpp"
 #include "glory/engine/particle_renderer.hpp"
 #include "glory/engine/particle_system.hpp"
+#include "glory/engine/texture2d.hpp"
 #include <filesystem>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 #include <functional>
 namespace glory::engine {
+struct StaticWorldProp {
+    std::string type;
+    glm::vec3 position{0.0F};
+    float yaw = 0.0F;
+    float scale = 1.0F;
+};
 class ModelRenderer {
 public:
     explicit ModelRenderer(const std::filesystem::path& modelPath);
@@ -68,5 +79,8 @@ private:
     float ambientOcclusion_ = 1.0F;
     bool skyboxEnabled_ = true;
     glm::mat4 modelTransform_{1.0F};
+    std::unique_ptr<Texture2D> arenaFloorTexture_;
+    std::unordered_map<std::string, std::unique_ptr<Model>> propModelTemplates_;
+    std::vector<StaticWorldProp> staticProps_;
 };
 }

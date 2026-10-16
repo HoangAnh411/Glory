@@ -133,6 +133,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     DirectionalLight light;
     PlayerFrameState player;
     bool thirdPersonMode = true;
+    bool targetLockActive = false;
     bool attackActive = false;
     bool resetBossRequested = false;
     std::string requestedSkillId;
@@ -183,6 +184,9 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 }
             }
 
+            const bool captureMouse = config.smokeTestTickLimit == 0 && !debugPanel.wantsCaptureMouse();
+            (void)SDL_SetWindowRelativeMouseMode(window, captureMouse);
+
             const std::uint64_t currentCounter = SDL_GetPerformanceCounter();
             const double frameSeconds = static_cast<double>(currentCounter - previousCounter) /
                 static_cast<double>(frequency);
@@ -210,6 +214,12 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     gameplayInput.pressed.end()) {
                     thirdPersonMode = !thirdPersonMode;
                 }
+                if (std::find(gameplayInput.pressed.begin(), gameplayInput.pressed.end(), input::Control::KeyTab) !=
+                    gameplayInput.pressed.end()) {
+                    targetLockActive = !targetLockActive;
+                }
+                if (player.bossDefeated) targetLockActive = false;
+                thirdPersonCamera.setLocked(targetLockActive, player.bossPosition);
                 if (thirdPersonMode) {
                     thirdPersonCamera.update(player.position, gameplayInput.mouseDeltaX, gameplayInput.mouseDeltaY);
                 } else {
@@ -218,6 +228,8 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 const float cameraYaw = thirdPersonMode ? thirdPersonCamera.yawDegrees() : camera.yawDegrees();
                 player = fixedUpdate(fixedDeltaSeconds, gameplayInput, cameraYaw, resetBossRequested,
                     requestedSkillId, statusCommand);
+                player.targetLocked = targetLockActive;
+                player.targetLockPosition = player.bossPosition;
                 animationFrozenThisFrame = animationFrozenThisFrame || player.hitStopActive;
                 resetBossRequested = false;
                 requestedSkillId.clear();
@@ -243,6 +255,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     if (renderer.triggerAnimationState("Attack")) {
                         attackActive = true;
                         attackRemaining = renderer.animationDuration();
+                        audio.playSwing();
                     }
                 } else if (attackActive && !animationFrozenThisFrame) {
                     attackRemaining -= static_cast<float>(fixedDeltaSeconds);
@@ -272,6 +285,10 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             const glm::vec3 cameraPosition = thirdPersonMode ? thirdPersonCamera.position() : camera.position();
             const float cameraYaw = thirdPersonMode ? thirdPersonCamera.yawDegrees() : camera.yawDegrees();
             const float cameraPitch = thirdPersonMode ? thirdPersonCamera.pitchDegrees() : camera.pitchDegrees();
+            const glm::mat4 view = thirdPersonMode ? thirdPersonCamera.viewMatrix() : camera.viewMatrix();
+            const glm::mat4 projection = thirdPersonMode ? thirdPersonCamera.projectionMatrix() : camera.projectionMatrix();
+            debugPanel.setViewProjection(projection * view);
+
             renderer.setTransform(player.position, player.facingYaw);
             if (!animationFrozenThisFrame) renderer.updateAnimation(static_cast<float>(frameSeconds));
             debugPanel.beginFrame(static_cast<float>(frameSeconds), completedTicks, cameraPosition,
@@ -288,8 +305,6 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 config.marketPanel, config.marketAction,
                 config.feedbackPanel, config.feedbackSubmit,
                 light, renderer, audio);
-            const glm::mat4 view = thirdPersonMode ? thirdPersonCamera.viewMatrix() : camera.viewMatrix();
-            const glm::mat4 projection = thirdPersonMode ? thirdPersonCamera.projectionMatrix() : camera.projectionMatrix();
             renderer.render(view, projection, cameraPosition, light, drawableWidth, drawableHeight);
             std::unordered_set<std::uint32_t> visibleRemoteIds;
             for (const auto& remote : player.remotePlayers) {
@@ -316,7 +331,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             });
             if (!player.bossDefeated)
                 bossRenderer.renderOverlay(view, projection, cameraPosition, light,
-                    player.bossPosition, player.bossYaw, 1.8F);
+                    player.bossPosition, player.bossYaw, 1.8F, glm::vec3(1.15F, 0.45F, 0.45F));
             debugPanel.render();
             SDL_GL_SwapWindow(window);
         }

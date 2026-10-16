@@ -49,6 +49,9 @@ public:
     void restoreNetworkState(const CharacterControllerState& state) noexcept;
     void reset() noexcept;
     [[nodiscard]] const CharacterControllerState& state() const noexcept { return state_; }
+    void addObstacle(const Aabb& obstacle) { collisionWorld_.addObstacle(obstacle); }
+    [[nodiscard]] CollisionWorld& collisionWorld() noexcept { return collisionWorld_; }
+    [[nodiscard]] const CollisionWorld& collisionWorld() const noexcept { return collisionWorld_; }
 
 private:
     CharacterControllerConfig config_;

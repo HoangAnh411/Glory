@@ -5,11 +5,11 @@
 namespace glory::engine {
 
 struct DirectionalLight {
-    glm::vec3 direction{0.5F, -0.70710678F, -0.5F};
-    glm::vec3 color{1.0F, 0.93F, 0.82F};
-    float ambientStrength = 0.18F;
-    float diffuseStrength = 0.85F;
-    float specularStrength = 0.5F;
+    glm::vec3 direction{0.25F, -0.85F, 0.45F};
+    glm::vec3 color{1.0F, 0.96F, 0.90F};
+    float ambientStrength = 0.55F;
+    float diffuseStrength = 0.95F;
+    float specularStrength = 0.65F;
     float shininess = 32.0F;
 };
 
