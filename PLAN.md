@@ -79,7 +79,7 @@ Platform (window, input, thời gian)
 ### Nâng cấp đồ họa: Giai đoạn A (Camera, ánh sáng, bóng)
 - [x] A1: Camera vai thứ ba 65 độ, tay đòn 5 m, lệch vai và spring arm chống vật cản
 - [x] A2: HDR, ACES tonemapping, xử lý màu sRGB/linear và GPU timer query
-- [ ] A3: Ánh sáng môi trường, cascaded shadows, fog và sky gradient (reopened: black ground requires visual root-cause confirmation)
+- [ ] A3: Ánh sáng môi trường, cascaded shadows, fog và sky gradient (reopened: black ground requires visual root-cause confirmation; camera and color incidents under repair)
 - A3c hoàn tất shadow atlas dùng chung và cascades runtime; smoke High 1080p đo 1.243 ms tổng GPU trên RTX 3050 Ti.
 - [ ] A4: Anti-aliasing, preset chất lượng và đo hiệu năng theo pass
 

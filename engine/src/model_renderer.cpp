@@ -525,16 +525,41 @@ float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
         !std::isfinite(cameraRadius) || cameraRadius < 0.0F) return 0.0F;
     const glm::vec3 direction = segment / segmentLength;
     float allowedDistance = segmentLength;
+    cameraBlockerName_ = "none";
     for (const StaticWorldProp& prop : staticProps_) {
-        const float radius = std::max(0.25F, 1.5F * std::abs(prop.scale)) + cameraRadius;
-        const glm::vec3 toCenter = prop.position - origin;
-        const float along = glm::dot(toCenter, direction);
-        if (along <= 0.0F) continue;
-        const float perpendicularSquared = glm::dot(toCenter, toCenter) - along * along;
-        const float radiusSquared = radius * radius;
-        if (perpendicularSquared >= radiusSquared) continue;
-        const float entry = along - std::sqrt(radiusSquared - perpendicularSquared);
-        if (entry >= 0.0F && entry < allowedDistance) allowedDistance = entry;
+        const auto model = propModelTemplates_.find(prop.type);
+        if (model == propModelTemplates_.end() || !model->second) continue;
+        const auto [localMin, localMax] = model->second->localBounds();
+        if (!std::isfinite(localMin.x) || !std::isfinite(localMax.x)) continue;
+        const glm::vec3 scaledMin = glm::min(localMin * prop.scale, localMax * prop.scale);
+        const glm::vec3 scaledMax = glm::max(localMin * prop.scale, localMax * prop.scale);
+        const glm::vec3 size = scaledMax - scaledMin;
+        if (std::max({size.x, size.y, size.z}) < 1.2F) continue;
+        const float yaw = glm::radians(-prop.yaw);
+        const glm::mat4 inverseRotation = glm::rotate(glm::mat4(1.0F), yaw, glm::vec3(0.0F, 1.0F, 0.0F));
+        const glm::vec3 localOrigin = glm::vec3(inverseRotation * glm::vec4(origin - prop.position, 1.0F));
+        const glm::vec3 localDirection = glm::vec3(inverseRotation * glm::vec4(direction, 0.0F));
+        const glm::vec3 boundsMin = scaledMin - glm::vec3(cameraRadius);
+        const glm::vec3 boundsMax = scaledMax + glm::vec3(cameraRadius);
+        float entry = 0.0F;
+        float exit = allowedDistance;
+        bool hit = true;
+        for (int axis = 0; axis < 3; ++axis) {
+            if (std::abs(localDirection[axis]) < 1.0e-6F) {
+                if (localOrigin[axis] < boundsMin[axis] || localOrigin[axis] > boundsMax[axis]) hit = false;
+                continue;
+            }
+            float nearT = (boundsMin[axis] - localOrigin[axis]) / localDirection[axis];
+            float farT = (boundsMax[axis] - localOrigin[axis]) / localDirection[axis];
+            if (nearT > farT) std::swap(nearT, farT);
+            entry = std::max(entry, nearT);
+            exit = std::min(exit, farT);
+            if (entry > exit) hit = false;
+        }
+        if (hit && entry >= 0.0F && entry < allowedDistance) {
+            allowedDistance = entry;
+            cameraBlockerName_ = prop.type;
+        }
     }
 
     // Keep the camera inside the arena's visible 35-meter perimeter.
@@ -549,9 +574,15 @@ float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
         const float discriminant = b * b - 4.0F * a * c;
         if (a > 1.0e-6F && discriminant >= 0.0F) {
             const float exitDistance = (-b + std::sqrt(discriminant)) / (2.0F * a);
-            allowedDistance = std::min(allowedDistance, std::max(0.0F, exitDistance - cameraRadius));
+            const float boundaryDistance = std::max(0.0F, exitDistance - cameraRadius);
+            if (boundaryDistance < allowedDistance) {
+                allowedDistance = boundaryDistance;
+                cameraBlockerName_ = "arena perimeter";
+            }
         }
     }
+    lastCameraObstructionDistance_ = allowedDistance;
+    if (cameraBlockerName_.empty()) cameraBlockerName_ = "none";
     return allowedDistance;
 }
 

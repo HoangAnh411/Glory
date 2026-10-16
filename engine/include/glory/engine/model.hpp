@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <memory>
 #include <glm/vec3.hpp>
+#include <utility>
 namespace glory::engine {
 class Model {
 public:
@@ -36,6 +37,7 @@ public:
     [[nodiscard]] float metallicFactor() const noexcept;
     [[nodiscard]] float roughnessFactor() const noexcept;
     [[nodiscard]] float ambientOcclusion() const noexcept;
+    [[nodiscard]] std::pair<glm::vec3, glm::vec3> localBounds() const noexcept;
 private:
     GltfAsset asset_;
     std::unique_ptr<Mesh> mesh_;

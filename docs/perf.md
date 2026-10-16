@@ -57,6 +57,8 @@ RTX 3050 Ti Laptop GPU, 1920x1080, HDR on, 240-frame GPU query average after add
 
 This is a smoke measurement, not a before/after visual diagnosis. No screenshot capture was available in the automated run.
 
+Camera-collision iteration smoke on the same RTX 3050 Ti Laptop GPU at 1920x1080 measured 1.488 ms total GPU frame (shadow cascades 0.111/0.141/0.127/0.051 ms; boss/remote 0.006 ms; scene 0.907 ms; sky 0.011 ms; particle/overlay 0.001 ms; tonemap 0.065 ms). Timing variance is expected between short smoke runs.
+
 ## A3c Shared CSM High Smoke
 
 - Date: 2026-10-16

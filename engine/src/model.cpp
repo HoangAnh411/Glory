@@ -2,6 +2,7 @@
 #include "glory/engine/gltf_asset.hpp"
 #include "glory/engine/image_loader.hpp"
 #include <memory>
+#include <limits>
 namespace glory::engine {
 Model::Model(GlApi& gl, const std::filesystem::path& path) : asset_(loadGltfAsset(path)) {
     ImageData image = asset_.embeddedTexture.empty() ? loadImage(asset_.texturePath) : decodeImage(asset_.embeddedTexture);
@@ -68,4 +69,14 @@ glm::vec3 Model::emissiveFactor() const noexcept { return {asset_.emissiveFactor
 float Model::metallicFactor() const noexcept { return asset_.metallicFactor; }
 float Model::roughnessFactor() const noexcept { return asset_.roughnessFactor; }
 float Model::ambientOcclusion() const noexcept { return asset_.ambientOcclusion; }
+std::pair<glm::vec3, glm::vec3> Model::localBounds() const noexcept {
+    glm::vec3 minimum(std::numeric_limits<float>::max());
+    glm::vec3 maximum(std::numeric_limits<float>::lowest());
+    for (const GltfVertex& vertex : asset_.vertices) {
+        const glm::vec3 position{vertex.position[0], vertex.position[1], vertex.position[2]};
+        minimum = glm::min(minimum, position);
+        maximum = glm::max(maximum, position);
+    }
+    return {minimum, maximum};
+}
 }

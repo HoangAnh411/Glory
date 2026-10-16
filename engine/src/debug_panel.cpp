@@ -593,6 +593,8 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     ImGui::Checkbox("Enhanced Shoulder Camera (compare old)", &enhancedCamera);
                     ImGui::Text("Position: %.2f, %.2f, %.2f | Yaw: %.1f | Pitch: %.1f",
                         cameraPosition.x, cameraPosition.y, cameraPosition.z, cameraYaw, cameraPitch);
+                    ImGui::Text("Spring arm blocker: %s | clear distance: %.2f m",
+                        renderer.cameraBlockerName().c_str(), renderer.lastCameraObstructionDistance());
                     ImGui::SeparatorText("HDR / Linear Color / GPU Timing");
                     bool hdrEnabled = renderPipeline.hdrEnabled();
                     if (ImGui::Checkbox("HDR + Linear + Tonemap", &hdrEnabled)) renderPipeline.setHdrEnabled(hdrEnabled);

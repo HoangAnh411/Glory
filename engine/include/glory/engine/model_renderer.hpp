@@ -44,6 +44,8 @@ public:
     void setTransform(const glm::vec3& position, float yawDegrees) noexcept;
     [[nodiscard]] float cameraObstructionDistance(const glm::vec3& origin,
         const glm::vec3& desiredPosition, float cameraRadius = 0.2F) const noexcept;
+    [[nodiscard]] const std::string& cameraBlockerName() const noexcept { return cameraBlockerName_; }
+    [[nodiscard]] float lastCameraObstructionDistance() const noexcept { return lastCameraObstructionDistance_; }
     [[nodiscard]] std::size_t spawnParticleBurst(const glm::vec3& position, std::size_t count = 48);
     [[nodiscard]] std::size_t activeParticleCount() const noexcept { return particles_.activeCount(); }
     void setAnimationPlaying(bool playing) noexcept;
@@ -128,5 +130,7 @@ private:
     std::unique_ptr<Texture2D> arenaFloorTexture_;
     std::unordered_map<std::string, std::unique_ptr<Model>> propModelTemplates_;
     std::vector<StaticWorldProp> staticProps_;
+    mutable std::string cameraBlockerName_ = "none";
+    mutable float lastCameraObstructionDistance_ = 0.0F;
 };
 }

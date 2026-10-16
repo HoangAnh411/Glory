@@ -14,7 +14,7 @@ struct ThirdPersonCameraConfig {
     float shoulderOffset = 0.5F;
     glm::vec3 targetOffset{0.0F, 1.4F, 0.0F};
     float yawDegrees = -90.0F;
-    float pitchDegrees = 12.0F;
+    float pitchDegrees = 10.0F;
     float fieldOfViewDegrees = 65.0F;
     float aspectRatio = 16.0F / 9.0F;
     float nearPlane = 0.1F;
@@ -94,7 +94,9 @@ public:
         const float pitch = glm::radians(pitchDegrees_);
         const glm::vec3 forward{std::cos(yaw) * std::cos(pitch), std::sin(pitch),
             std::sin(yaw) * std::cos(pitch)};
-        return targetPosition() - forward * effectiveDistance_;
+        glm::vec3 cameraPosition = targetPosition() - forward * effectiveDistance_;
+        cameraPosition.y = std::max(cameraPosition.y, 0.4F);
+        return cameraPosition;
     }
     [[nodiscard]] glm::vec3 targetPosition() const noexcept {
         const float yaw = glm::radians(yawDegrees_);
@@ -125,9 +127,9 @@ private:
         return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
     }
 
-    static constexpr float minimumPitchDegrees = -80.0F;
-    static constexpr float maximumPitchDegrees = 80.0F;
-    static constexpr float minimumArmDistance = 0.35F;
+    static constexpr float minimumPitchDegrees = -10.0F;
+    static constexpr float maximumPitchDegrees = 55.0F;
+    static constexpr float minimumArmDistance = 2.5F;
     static constexpr float armReturnSpeed = 8.0F;
     static constexpr glm::vec3 worldUp{0.0F, 1.0F, 0.0F};
     glm::vec3 target_{0.0F};

@@ -25,14 +25,14 @@ void testFollowOrbitAndMatrices() {
     expect(nearlyEqual(camera.distance(), 5.0F), "enhanced camera defaults to a five-meter arm");
     expect(nearlyEqual(camera.fieldOfViewDegrees(), 65.0F), "enhanced camera default FOV is 65 degrees");
     camera.constrainArm(2.0F, 0.016F);
-    expect(nearlyEqual(camera.effectiveDistance(), 2.0F), "camera arm retracts immediately at an obstruction");
+    expect(nearlyEqual(camera.effectiveDistance(), 2.5F), "camera arm never retracts inside the minimum distance");
     camera.constrainArm(5.0F, 0.1F);
-    expect(nearlyEqual(camera.effectiveDistance(), 2.8F), "camera arm extends back smoothly after obstruction clears");
+    expect(nearlyEqual(camera.effectiveDistance(), 3.3F), "camera arm extends back smoothly after obstruction clears");
     camera.update({2.0F, 0.0F, 3.0F}, 100.0F, -100.0F);
-    expect(nearlyEqual(camera.yawDegrees(), -80.0F) && nearlyEqual(camera.pitchDegrees(), 22.0F),
+    expect(nearlyEqual(camera.yawDegrees(), -80.0F) && nearlyEqual(camera.pitchDegrees(), 20.0F),
         "relative mouse deltas orbit the camera");
     camera.update({2.0F, 0.0F, 3.0F}, 0.0F, -10000.0F);
-    expect(nearlyEqual(camera.pitchDegrees(), 80.0F), "pitch is clamped before camera inversion");
+    expect(nearlyEqual(camera.pitchDegrees(), 55.0F), "pitch is clamped to the safe upper angle");
     const glm::mat4 viewProjection = camera.viewProjectionMatrix();
     expect(std::isfinite(viewProjection[0][0]) && std::isfinite(viewProjection[3][3]),
         "view-projection matrix contains finite values");
