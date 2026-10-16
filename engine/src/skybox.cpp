@@ -60,14 +60,23 @@ std::array<unsigned char, 4> skyColor(int face, int x, int y, int size) {
     const float u = 2.0F * (static_cast<float>(x) + 0.5F) / static_cast<float>(size) - 1.0F;
     const float v = 2.0F * (static_cast<float>(y) + 0.5F) / static_cast<float>(size) - 1.0F;
     const glm::vec3 direction = glm::normalize(faceDirection(face, u, v));
-    const float horizon = glm::smoothstep(-0.15F, 0.45F, direction.y);
-    const float sunsetGlow = glm::clamp(1.0F - std::abs(direction.y - 0.08F) * 4.0F, 0.0F, 1.0F);
+    const float horizon = glm::smoothstep(-0.22F, 0.48F, direction.y);
+    const float horizonBand = std::exp(-std::pow((direction.y - 0.025F) * 8.0F, 2.0F));
+    const float warmBand = std::exp(-std::pow((direction.y - 0.22F) * 4.5F, 2.0F));
     const float cloud = std::clamp(std::sin(direction.x * 12.0F + direction.z * 9.0F) *
         std::sin(direction.z * 15.0F - direction.y * 7.0F), 0.0F, 1.0F);
-    const glm::vec3 horizonColor = glm::mix(glm::vec3(0.55F, 0.62F, 0.70F), glm::vec3(0.88F, 0.68F, 0.45F), sunsetGlow * 0.7F);
-    const glm::vec3 zenithColor = glm::vec3(0.12F, 0.38F, 0.75F);
+    const glm::vec3 horizonColor = glm::mix(glm::vec3(0.96F, 0.50F, 0.24F),
+        glm::vec3(0.98F, 0.76F, 0.40F), glm::clamp((direction.y + 0.18F) * 2.0F, 0.0F, 1.0F));
+    const glm::vec3 zenithColor = glm::vec3(0.12F, 0.16F, 0.38F);
     glm::vec3 color = glm::mix(horizonColor, zenithColor, horizon);
-    color = glm::mix(color, glm::vec3(0.92F, 0.88F, 0.82F), cloud * horizon * 0.25F);
+    color = glm::mix(color, glm::vec3(0.94F, 0.37F, 0.27F), warmBand * 0.55F);
+    const glm::vec3 sunDirection = glm::normalize(glm::vec3(0.612F, 0.5F, 0.612F));
+    const float sunDot = glm::dot(direction, sunDirection);
+    const float sunDisc = std::pow(glm::clamp((sunDot - 0.996F) / 0.004F, 0.0F, 1.0F), 0.45F);
+    const float sunGlow = std::exp(-std::max(0.0F, 1.0F - sunDot) * 34.0F);
+    color += glm::vec3(1.4F, 0.75F, 0.30F) * sunGlow * horizonBand;
+    color = glm::mix(color, glm::vec3(1.0F, 0.88F, 0.62F), sunDisc);
+    color = glm::mix(color, glm::vec3(0.96F, 0.66F, 0.47F), cloud * (0.12F + horizonBand * 0.22F));
     return {
         static_cast<unsigned char>(std::clamp(color.r * 255.0F, 0.0F, 255.0F)),
         static_cast<unsigned char>(std::clamp(color.g * 255.0F, 0.0F, 255.0F)),

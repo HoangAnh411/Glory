@@ -5,16 +5,16 @@ Replace the single shadow/light setup with stable cascades, shared character sha
 
 ## 2. Tasks
 ### A3a commit: `feat(render): add cascaded shadows and ambient lighting`
-1. Add CPU cascade split/frustum/snap math and unit tests.
-2. Replace the single depth target with a configurable cascade array and update forward shading for cascade selection, soft PCF, transition blending, debug colors, hemisphere ambient, and character-only fill/rim.
-3. Route player, boss, and remote renderers through the same scene/shadow path, retaining per-actor tint and animation.
+1. Add CPU cascade split and snap math with unit tests. (Implemented as preparation only.)
+2. Replace the single depth target with configurable cascades, PCF quality, blending and debug. (Not implemented; runtime remains single-map.) Ambient and character fill/rim are implemented.
+3. Route actors through shared shadow resources. (Actors render their own depth pass and sample their own map; maps are not shared with player/world.)
 4. Add F3 controls for shadows, cascade count/splits/far distance, map size/sample quality, cascade debug, ambient, fill/rim, sun direction/color/intensity.
 5. Build, test, run smoke, collect timer-query readings, review and commit A3a.
 
 ### A3b commit: `feat(render): add sunset sky and height fog`
-1. Replace the plain sky gradient with layered sunset/sunrise/noon parameters and a soft solar disc/glow aligned to the key light.
-2. Add distance exponential-squared and height fog with finite-safe math and sky-facing color variation.
-3. Add F3 presets Sunset/Sunrise/Noon/Old and independent shadow, hemisphere, fill/rim, fog, and new-sky toggles.
+1. Replace the plain sky gradient with layered sunset colors and a soft solar disc/glow.
+2. Add distance exponential-squared and height fog with finite-safe math. (Fog color is a fixed warm/cool blend, not sampled per view direction.)
+3. Add F3 presets Sunset/Sunrise/Noon/Old and ambient, fill/rim, fog, and sky toggles. (Cascade controls remain outstanding.)
 4. Extend tests/smoke, collect 1080p per-pass timings, update performance notes and roadmap, review and commit A3b.
 
 ## 3. Files to Touch

@@ -633,6 +633,35 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     ImGui::SeparatorText("Shadows");
                     bool shadowsEnabled = renderer.shadowsEnabled();
                     if (ImGui::Checkbox("Enable Shadow", &shadowsEnabled)) renderer.setShadowsEnabled(shadowsEnabled);
+                    static int lightingPreset = 0;
+                    static const char* presetNames[] = {"Sunset", "Sunrise", "Noon", "Old"};
+                    if (ImGui::Combo("Lighting preset", &lightingPreset, presetNames, 4)) {
+                        switch (lightingPreset) {
+                        case 0:
+                            light.direction = {-0.612F, -0.5F, -0.612F}; light.color = {1.0F, 0.68F, 0.42F};
+                            light.ambientStrength = 0.72F; light.diffuseStrength = 1.35F; break;
+                        case 1:
+                            light.direction = {-0.36F, -0.5F, -0.78F}; light.color = {0.72F, 0.62F, 1.0F};
+                            light.ambientStrength = 0.82F; light.diffuseStrength = 1.1F; break;
+                        case 2:
+                            light.direction = {-0.18F, -0.94F, -0.30F}; light.color = {1.0F, 0.96F, 0.88F};
+                            light.ambientStrength = 0.9F; light.diffuseStrength = 1.0F; break;
+                        default:
+                            light.direction = {0.25F, -0.85F, 0.45F}; light.color = {1.0F, 0.96F, 0.90F};
+                            light.ambientStrength = 0.55F; light.diffuseStrength = 0.95F; break;
+                        }
+                    }
+                    bool hemisphere = renderer.hemisphereEnabled();
+                    if (ImGui::Checkbox("Hemisphere ambient", &hemisphere)) renderer.setHemisphereEnabled(hemisphere);
+                    bool fog = renderer.fogEnabled();
+                    if (ImGui::Checkbox("Distance + height fog", &fog)) renderer.setFogEnabled(fog);
+                    float fogDensity = renderer.fogDensity();
+                    if (ImGui::SliderFloat("Fog density", &fogDensity, 0.0F, 0.03F, "%.4f")) renderer.setFogDensity(fogDensity);
+                    bool newSky = renderer.skyboxEnabled();
+                    if (ImGui::Checkbox("Layered sunset sky", &newSky)) renderer.setSkyboxEnabled(newSky);
+                    bool characterLighting = renderer.characterLightingEnabled();
+                    if (ImGui::Checkbox("Character fill / rim", &characterLighting))
+                        renderer.setCharacterLightingEnabled(characterLighting);
                     float shadowBias = renderer.shadowBias();
                     if (ImGui::SliderFloat("Shadow Bias", &shadowBias, 0.0001F, 0.02F, "%.4f", ImGuiSliderFlags_Logarithmic)) {
                         renderer.setShadowBias(shadowBias);
@@ -661,15 +690,15 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     ImGui::Text("Audio: %s", audio.available() ? "Ready" : "Unavailable");
 
                     ImGui::SeparatorText("Directional Light");
-                    static float lightYaw = -45.0F;
-                    static float lightPitch = -45.0F;
+                    static float lightYaw = -135.0F;
+                    static float lightPitch = -30.0F;
                     const bool yawChanged = ImGui::SliderFloat("Light yaw", &lightYaw, -180.0F, 180.0F);
                     const bool pitchChanged = ImGui::SliderFloat("Light pitch", &lightPitch, -89.0F, 89.0F);
                     if (yawChanged || pitchChanged) {
                         setDirectionFromAngles(light, lightYaw, lightPitch);
                     }
                     ImGui::ColorEdit3("Light color", &light.color.x);
-                    ImGui::SliderFloat("Ambient", &light.ambientStrength, 0.0F, 1.0F);
+                    ImGui::SliderFloat("Ambient", &light.ambientStrength, 0.35F, 1.5F);
                     ImGui::SliderFloat("Diffuse", &light.diffuseStrength, 0.0F, 2.0F);
                     ImGui::SliderFloat("Specular", &light.specularStrength, 0.0F, 2.0F);
                     ImGui::SliderFloat("Shininess", &light.shininess, 2.0F, 256.0F, "%.0f", ImGuiSliderFlags_Logarithmic);
