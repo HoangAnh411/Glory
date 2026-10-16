@@ -32,7 +32,8 @@ public:
         const DirectionalLight& light, int width, int height, RenderPipeline& pipeline) const;
     void renderOverlay(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPosition,
         const DirectionalLight& light, const glm::vec3& position, float yawDegrees, float scale,
-        const glm::vec3& tint, bool encodeSrgb) const;
+        const glm::vec3& tint, bool encodeSrgb, int width, int height,
+        RenderPipeline& pipeline) const;
     void updateAnimation(float deltaSeconds);
     void setTransform(const glm::vec3& position, float yawDegrees) noexcept;
     [[nodiscard]] float cameraObstructionDistance(const glm::vec3& origin,
@@ -50,6 +51,14 @@ public:
     void setAnimationEventCallback(AnimationEventCallback callback);
     void setShadowsEnabled(bool enabled) noexcept { shadowsEnabled_ = enabled; }
     [[nodiscard]] bool shadowsEnabled() const noexcept { return shadowsEnabled_; }
+    void setCharacterLightingEnabled(bool enabled) noexcept { characterLightingEnabled_ = enabled; }
+    [[nodiscard]] bool characterLightingEnabled() const noexcept { return characterLightingEnabled_; }
+    void setFogEnabled(bool enabled) noexcept { fogEnabled_ = enabled; }
+    [[nodiscard]] bool fogEnabled() const noexcept { return fogEnabled_; }
+    void setFogDensity(float density) noexcept;
+    [[nodiscard]] float fogDensity() const noexcept { return fogDensity_; }
+    void setHemisphereEnabled(bool enabled) noexcept { hemisphereEnabled_ = enabled; }
+    [[nodiscard]] bool hemisphereEnabled() const noexcept { return hemisphereEnabled_; }
     void setShadowBias(float bias) noexcept;
     [[nodiscard]] float shadowBias() const noexcept { return shadowBias_; }
     void setPbrMaterial(float metallic, float roughness, float ao) noexcept;
@@ -77,6 +86,10 @@ private:
     ParticleSystem particles_;
     ParticleRenderer particleRenderer_;
     bool shadowsEnabled_ = true;
+    bool characterLightingEnabled_ = true;
+    bool fogEnabled_ = true;
+    bool hemisphereEnabled_ = true;
+    float fogDensity_ = 0.008F;
     float shadowBias_ = 0.005F;
     float metallic_ = 0.0F;
     float roughness_ = 0.5F;

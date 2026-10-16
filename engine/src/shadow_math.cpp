@@ -1,10 +1,13 @@
 #include "glory/engine/shadow_math.hpp"
 
 #include <glm/geometric.hpp>
+#include <glm/common.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <vector>
 
 namespace glory::engine {
 namespace {
@@ -39,6 +42,38 @@ glm::mat4 calculateLightSpaceMatrix(
         -orthographicHalfExtent.y, orthographicHalfExtent.y,
         nearPlane, farPlane);
     return lightProjection * lightView;
+}
+
+std::vector<float> calculateCascadeSplits(float nearPlane, float farPlane, int cascadeCount, float lambda) {
+    if (!std::isfinite(nearPlane) || !std::isfinite(farPlane) || !std::isfinite(lambda) ||
+        nearPlane <= 0.0F || farPlane <= nearPlane || cascadeCount < 1 || cascadeCount > 4)
+        throw std::invalid_argument("Invalid cascade split parameters");
+    lambda = std::clamp(lambda, 0.0F, 1.0F);
+    std::vector<float> splits;
+    splits.reserve(static_cast<std::size_t>(cascadeCount));
+    for (int index = 1; index <= cascadeCount; ++index) {
+        const float fraction = static_cast<float>(index) / static_cast<float>(cascadeCount);
+        const float logarithmic = nearPlane * std::pow(farPlane / nearPlane, fraction);
+        const float uniform = nearPlane + (farPlane - nearPlane) * fraction;
+        splits.push_back(lambda * logarithmic + (1.0F - lambda) * uniform);
+    }
+    splits.back() = farPlane;
+    return splits;
+}
+
+glm::vec2 snapShadowCenterToTexel(const glm::vec2& center, float worldUnitsPerTexel) {
+    if (!std::isfinite(center.x) || !std::isfinite(center.y) ||
+        !std::isfinite(worldUnitsPerTexel) || worldUnitsPerTexel <= 0.0F)
+        throw std::invalid_argument("Invalid shadow texel snapping parameters");
+    return glm::round(center / worldUnitsPerTexel) * worldUnitsPerTexel;
+}
+
+float calculateHeightFogFactor(float distance, float worldHeight, float density) noexcept {
+    if (!std::isfinite(distance) || !std::isfinite(worldHeight) || !std::isfinite(density) ||
+        distance <= 0.0F || density <= 0.0F) return 0.0F;
+    const float heightDensity = std::exp(-std::max(worldHeight, 0.0F) * 0.045F);
+    const float opticalDepth = std::min(density * distance * heightDensity, 20.0F);
+    return std::clamp(1.0F - std::exp(-(opticalDepth * opticalDepth)), 0.0F, 1.0F);
 }
 
 } // namespace glory::engine

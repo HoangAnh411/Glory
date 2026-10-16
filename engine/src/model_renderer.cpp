@@ -99,6 +99,10 @@ uniform bool u_ShadowEnabled;
 uniform bool u_UseTexture;
 uniform bool u_EncodeSrgb;
 uniform vec3 u_EmissiveFactor;
+uniform bool u_CharacterLighting;
+uniform bool u_FogEnabled;
+uniform bool u_HemisphereEnabled;
+uniform float u_FogDensity;
 out vec4 fragmentColor;
 const float PI=3.14159265359;
 vec3 srgbToLinear(vec3 value){
@@ -171,12 +175,20 @@ void main(){
     vec3 environmentDiffuse=ambientDiffuseLight*baseColor*kD;
     vec3 environmentSpecular=texture(u_EnvironmentMap,reflect(-viewDir,normal)).rgb*fresnel*(1.0-roughness);
     vec3 ambient=(environmentDiffuse+environmentSpecular)*u_AmbientStrength*u_AO;
+    if(u_HemisphereEnabled) ambient=max(ambient,baseColor*0.12);
     float shadow=calculateShadow(normal,lightDir);
     vec3 direct=(diffuse+specular)*srgbToLinear(u_LightColor)*u_DiffuseStrength*nDotL;
     vec3 litColor=ambient+(1.0-shadow)*direct;
+    if(u_CharacterLighting){
+        float backLight=max(dot(normal,normalize(vec3(-lightDir.x,0.25,-lightDir.z))),0.0);
+        float rim=pow(1.0-max(dot(normal,viewDir),0.0),3.0);
+        litColor+=baseColor*vec3(0.12,0.19,0.28)*backLight+vec3(0.16,0.22,0.34)*rim;
+    }
     float dist=length(u_ViewPosition-vFragPos);
-    float fogFactor=clamp((dist-48.0)/65.0,0.0,0.85);
-    vec3 fogColor=srgbToLinear(vec3(0.68,0.62,0.55));
+    float heightDensity=exp(-max(vFragPos.y,0.0)*0.045);
+    float fogAmount=1.0-exp(-pow(max(u_FogDensity,0.0)*dist*heightDensity,2.0));
+    float fogFactor=u_FogEnabled?clamp(fogAmount*smoothstep(12.0,38.0,dist),0.0,0.82):0.0;
+    vec3 fogColor=srgbToLinear(mix(vec3(0.34,0.40,0.57),vec3(0.88,0.48,0.28),0.72));
     vec3 finalColor=mix(litColor,fogColor,fogFactor)+u_EmissiveFactor;
     if(u_EncodeSrgb) finalColor=linearToSrgb(finalColor);
     fragmentColor=vec4(finalColor,baseSample.a);
@@ -296,6 +308,10 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
     shader_.setPbrMaterial(metallic_, roughness_, ambientOcclusion_);
     shader_.setSkinPalette({}, false);
     shader_.setEncodeSrgb(!pipeline.hdrEnabled());
+    gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_CharacterLighting"), GL_FALSE);
+    gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_FogEnabled"), fogEnabled_ ? GL_TRUE : GL_FALSE);
+    gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_HemisphereEnabled"), hemisphereEnabled_ ? GL_TRUE : GL_FALSE);
+    gl_.uniform1f(gl_.getUniformLocation(shader_.program(), "u_FogDensity"), fogDensity_);
     shader_.setEmissiveFactor({0.0F, 0.0F, 0.0F});
     pipeline.beginPass(GpuPass::Scene);
     if (arenaFloorTexture_) {
@@ -349,10 +365,28 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
 
 void ModelRenderer::renderOverlay(const glm::mat4& view, const glm::mat4& projection,
     const glm::vec3& viewPosition, const DirectionalLight& light, const glm::vec3& position,
-    float yawDegrees, float scale, const glm::vec3& tint, bool encodeSrgb) const {
+    float yawDegrees, float scale, const glm::vec3& tint, bool encodeSrgb,
+    int width, int height, RenderPipeline& pipeline) const {
     if (!std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z) ||
         !std::isfinite(yawDegrees) || !std::isfinite(scale) || scale <= 0.0F ||
         !std::isfinite(tint.x) || !std::isfinite(tint.y) || !std::isfinite(tint.z)) return;
+    const glm::mat4 lightSpace = calculateLightSpaceMatrix(
+        light.direction, position, glm::vec2(18.0F), 0.1F, 55.0F);
+    if (shadowsEnabled_) {
+        shadowMap_.bindForWriting();
+        gl_.viewport(0, 0, shadowMap_.resolution(), shadowMap_.resolution());
+        gl_.clear(GL_DEPTH_BUFFER_BIT);
+        depthShader_.use();
+        depthShader_.setViewProjection(lightSpace);
+        depthShader_.setModelMatrix(glm::translate(glm::mat4(1.0F), position) *
+            glm::rotate(glm::mat4(1.0F), glm::radians(yawDegrees), glm::vec3(0.0F, 1.0F, 0.0F)) *
+            glm::scale(glm::mat4(1.0F), glm::vec3(scale)));
+        depthShader_.setSkinPalette(model_.skinPalette(), model_.hasSkin());
+        model_.draw();
+        ShadowMap::bindDefaultFramebuffer(gl_);
+        pipeline.bindSceneTarget();
+        gl_.viewport(0, 0, width, height);
+    }
     shadowMap_.bindForSampling(1);
     skybox_.bindEnvironment(2);
     gl_.activeTexture(GL_TEXTURE0);
@@ -362,7 +396,13 @@ void ModelRenderer::renderOverlay(const glm::mat4& view, const glm::mat4& projec
         glm::rotate(glm::mat4(1.0F), glm::radians(yawDegrees), glm::vec3(0.0F, 1.0F, 0.0F)) *
         glm::scale(glm::mat4(1.0F), glm::vec3(scale)));
     shader_.setLighting(light, viewPosition);
-    shader_.setShadowSettings(false, shadowBias_);
+    shader_.setLightSpaceMatrix(lightSpace);
+    shader_.setShadowSettings(shadowsEnabled_, shadowBias_);
+    gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_CharacterLighting"),
+        characterLightingEnabled_ ? GL_TRUE : GL_FALSE);
+    gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_FogEnabled"), fogEnabled_ ? GL_TRUE : GL_FALSE);
+    gl_.uniform1i(gl_.getUniformLocation(shader_.program(), "u_HemisphereEnabled"), hemisphereEnabled_ ? GL_TRUE : GL_FALSE);
+    gl_.uniform1f(gl_.getUniformLocation(shader_.program(), "u_FogDensity"), fogDensity_);
     shader_.setEncodeSrgb(encodeSrgb);
     shader_.setPbrMaterial(metallic_, roughness_, ambientOcclusion_);
     shader_.setSkinPalette(model_.skinPalette(), model_.hasSkin());
@@ -421,6 +461,10 @@ float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
 
 void ModelRenderer::setShadowBias(float bias) noexcept {
     if (std::isfinite(bias)) shadowBias_ = std::clamp(bias, 0.0001F, 0.02F);
+}
+
+void ModelRenderer::setFogDensity(float density) noexcept {
+    if (std::isfinite(density)) fogDensity_ = std::clamp(density, 0.0F, 0.05F);
 }
 
 void ModelRenderer::setPbrMaterial(float metallic, float roughness, float ao) noexcept {

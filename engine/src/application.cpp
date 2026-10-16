@@ -348,9 +348,13 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 if (inserted) {
                     entry->second.model = std::make_unique<ModelRenderer>(config.modelPath);
                     entry->second.model->setSkyboxEnabled(false);
-                    entry->second.model->setShadowsEnabled(false);
                 }
                 ModelRenderer& remoteModel = *entry->second.model;
+                remoteModel.setShadowsEnabled(renderer.shadowsEnabled());
+                remoteModel.setCharacterLightingEnabled(renderer.characterLightingEnabled());
+                remoteModel.setFogEnabled(renderer.fogEnabled());
+                remoteModel.setFogDensity(renderer.fogDensity());
+                remoteModel.setHemisphereEnabled(renderer.hemisphereEnabled());
                 if (entry->second.animationState != remote.animationState &&
                     remoteModel.triggerAnimationState(remote.animationState))
                     entry->second.animationState = remote.animationState;
@@ -359,15 +363,21 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 const glm::vec3 tint = colorIndex == 0 ? glm::vec3(0.45F, 0.72F, 1.0F) :
                     (colorIndex == 1 ? glm::vec3(1.0F, 0.55F, 0.38F) : glm::vec3(0.55F, 1.0F, 0.62F));
                 remoteModel.renderOverlay(view, projection, cameraPosition, light,
-                    remote.position, remote.yaw, 1.0F, tint, !renderPipeline.hdrEnabled());
+                    remote.position, remote.yaw, 1.0F, tint, !renderPipeline.hdrEnabled(),
+                    drawableWidth, drawableHeight, renderPipeline);
             }
             std::erase_if(remoteRenderers, [&visibleRemoteIds](const auto& entry) {
                 return !visibleRemoteIds.contains(entry.first);
             });
+            bossRenderer.setShadowsEnabled(renderer.shadowsEnabled());
+            bossRenderer.setCharacterLightingEnabled(renderer.characterLightingEnabled());
+            bossRenderer.setFogEnabled(renderer.fogEnabled());
+            bossRenderer.setFogDensity(renderer.fogDensity());
+            bossRenderer.setHemisphereEnabled(renderer.hemisphereEnabled());
             if (!player.bossDefeated)
                 bossRenderer.renderOverlay(view, projection, cameraPosition, light,
                     player.bossPosition, player.bossYaw, 1.8F, glm::vec3(1.15F, 0.45F, 0.45F),
-                    !renderPipeline.hdrEnabled());
+                    !renderPipeline.hdrEnabled(), drawableWidth, drawableHeight, renderPipeline);
             renderPipeline.endPass();
             renderPipeline.finishFrame();
             debugPanel.render();
