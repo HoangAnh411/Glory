@@ -52,7 +52,8 @@ public:
     void setDevToolsVisible(bool visible) noexcept { devToolsVisible_ = visible; }
     [[nodiscard]] bool isFeedbackOpen() const noexcept { return feedbackOpenRequested_; }
     void beginFrame(float frameSeconds, std::uint64_t fixedTicks, const glm::vec3& cameraPosition,
-        float cameraYaw, float cameraPitch, bool& thirdPersonMode, const PlayerFrameState& player,
+        float cameraYaw, float cameraPitch, bool& thirdPersonMode, bool& enhancedCamera,
+        const PlayerFrameState& player,
         bool& resetBossRequested, std::string& requestedSkillId,
         std::string& statusCommand,
         std::vector<SkillEditorSkill>& editorSkills,

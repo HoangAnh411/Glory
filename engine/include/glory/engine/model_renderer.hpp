@@ -33,6 +33,8 @@ public:
         const glm::vec3& tint = glm::vec3(1.0F)) const;
     void updateAnimation(float deltaSeconds);
     void setTransform(const glm::vec3& position, float yawDegrees) noexcept;
+    [[nodiscard]] float cameraObstructionDistance(const glm::vec3& origin,
+        const glm::vec3& desiredPosition, float cameraRadius = 0.2F) const noexcept;
     [[nodiscard]] std::size_t spawnParticleBurst(const glm::vec3& position, std::size_t count = 48);
     [[nodiscard]] std::size_t activeParticleCount() const noexcept { return particles_.activeCount(); }
     void setAnimationPlaying(bool playing) noexcept;

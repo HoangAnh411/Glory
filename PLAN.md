@@ -76,6 +76,12 @@ Platform (window, input, thời gian)
 - [x] Tích hợp âm thanh bằng miniaudio
 - [x] **Cột mốc:** nhân vật chạy, đánh, có bóng đổ và hiệu ứng
 
+### Nâng cấp đồ họa: Giai đoạn A (Camera, ánh sáng, bóng)
+- [x] A1: Camera vai thứ ba 65 độ, tay đòn 5 m, lệch vai và spring arm chống vật cản
+- [ ] A2: HDR, ACES tonemapping, xử lý màu sRGB/linear và GPU timer query
+- [ ] A3: Ánh sáng môi trường, cascaded shadows, fog và sky gradient
+- [ ] A4: Anti-aliasing, preset chất lượng và đo hiệu năng theo pass
+
 ### Giai đoạn 3: Gameplay lõi, single-player (3-4 tháng)
 - [x] Character controller: chạy, nhảy, camera third-person
 - [x] Né đòn (dodge) với khung bất tử ngắn

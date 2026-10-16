@@ -343,6 +343,44 @@ void ModelRenderer::setTransform(const glm::vec3& position, float yawDegrees) no
         glm::rotate(glm::mat4(1.0F), glm::radians(yawDegrees), glm::vec3(0.0F, 1.0F, 0.0F));
 }
 
+float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
+    const glm::vec3& desiredPosition, float cameraRadius) const noexcept {
+    const glm::vec3 segment = desiredPosition - origin;
+    const float segmentLength = glm::length(segment);
+    if (!std::isfinite(segmentLength) || segmentLength <= 1.0e-4F ||
+        !std::isfinite(cameraRadius) || cameraRadius < 0.0F) return 0.0F;
+    const glm::vec3 direction = segment / segmentLength;
+    float allowedDistance = segmentLength;
+    for (const StaticWorldProp& prop : staticProps_) {
+        const float radius = std::max(0.25F, 1.5F * std::abs(prop.scale)) + cameraRadius;
+        const glm::vec3 toCenter = prop.position - origin;
+        const float along = glm::dot(toCenter, direction);
+        if (along <= 0.0F) continue;
+        const float perpendicularSquared = glm::dot(toCenter, toCenter) - along * along;
+        const float radiusSquared = radius * radius;
+        if (perpendicularSquared >= radiusSquared) continue;
+        const float entry = along - std::sqrt(radiusSquared - perpendicularSquared);
+        if (entry >= 0.0F && entry < allowedDistance) allowedDistance = entry;
+    }
+
+    // Keep the camera inside the arena's visible 35-meter perimeter.
+    constexpr float arenaRadius = 34.0F;
+    const glm::vec2 start{origin.x, origin.z};
+    const glm::vec2 ray{direction.x, direction.z};
+    const glm::vec2 end = start + ray * allowedDistance;
+    if (glm::dot(end, end) > arenaRadius * arenaRadius) {
+        const float a = glm::dot(ray, ray);
+        const float b = 2.0F * glm::dot(start, ray);
+        const float c = glm::dot(start, start) - arenaRadius * arenaRadius;
+        const float discriminant = b * b - 4.0F * a * c;
+        if (a > 1.0e-6F && discriminant >= 0.0F) {
+            const float exitDistance = (-b + std::sqrt(discriminant)) / (2.0F * a);
+            allowedDistance = std::min(allowedDistance, std::max(0.0F, exitDistance - cameraRadius));
+        }
+    }
+    return allowedDistance;
+}
+
 void ModelRenderer::setShadowBias(float bias) noexcept {
     if (std::isfinite(bias)) shadowBias_ = std::clamp(bias, 0.0001F, 0.02F);
 }

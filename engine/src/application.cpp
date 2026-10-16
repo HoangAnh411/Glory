@@ -130,9 +130,16 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     InputSystem inputSystem;
     FreeCamera camera;
     ThirdPersonCamera thirdPersonCamera;
+    ThirdPersonCameraConfig legacyCameraConfig;
+    legacyCameraConfig.distance = 4.5F;
+    legacyCameraConfig.shoulderOffset = 0.0F;
+    legacyCameraConfig.targetOffset = {0.0F, 1.2F, 0.0F};
+    legacyCameraConfig.fieldOfViewDegrees = 45.0F;
+    ThirdPersonCamera legacyThirdPersonCamera(legacyCameraConfig);
     DirectionalLight light;
     PlayerFrameState player;
     bool thirdPersonMode = true;
+    bool enhancedCamera = true;
     bool targetLockActive = false;
     bool attackActive = false;
     bool resetBossRequested = false;
@@ -220,8 +227,10 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 }
                 if (player.bossDefeated) targetLockActive = false;
                 thirdPersonCamera.setLocked(targetLockActive, player.bossPosition);
+                legacyThirdPersonCamera.setLocked(targetLockActive, player.bossPosition);
                 if (thirdPersonMode) {
                     thirdPersonCamera.update(player.position, gameplayInput.mouseDeltaX, gameplayInput.mouseDeltaY);
+                    legacyThirdPersonCamera.update(player.position, gameplayInput.mouseDeltaX, gameplayInput.mouseDeltaY);
                 } else {
                     camera.update(gameplayInput, fixedDeltaSeconds);
                 }
@@ -247,6 +256,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     audio.playHit();
                 }
                 thirdPersonCamera.setTarget(player.position);
+                legacyThirdPersonCamera.setTarget(player.position);
                 if (player.attackCanceled) {
                     attackActive = false;
                     const char* locomotion = player.isMoving ? "Run" : "Idle";
@@ -281,18 +291,27 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     static_cast<float>(drawableWidth) / static_cast<float>(drawableHeight));
                 thirdPersonCamera.setAspectRatio(
                     static_cast<float>(drawableWidth) / static_cast<float>(drawableHeight));
+                legacyThirdPersonCamera.setAspectRatio(
+                    static_cast<float>(drawableWidth) / static_cast<float>(drawableHeight));
             }
-            const glm::vec3 cameraPosition = thirdPersonMode ? thirdPersonCamera.position() : camera.position();
-            const float cameraYaw = thirdPersonMode ? thirdPersonCamera.yawDegrees() : camera.yawDegrees();
-            const float cameraPitch = thirdPersonMode ? thirdPersonCamera.pitchDegrees() : camera.pitchDegrees();
-            const glm::mat4 view = thirdPersonMode ? thirdPersonCamera.viewMatrix() : camera.viewMatrix();
-            const glm::mat4 projection = thirdPersonMode ? thirdPersonCamera.projectionMatrix() : camera.projectionMatrix();
+            if (thirdPersonMode && enhancedCamera) {
+                const float armLimit = renderer.cameraObstructionDistance(
+                    thirdPersonCamera.targetPosition(), thirdPersonCamera.desiredPosition());
+                thirdPersonCamera.constrainArm(armLimit, static_cast<float>(frameSeconds));
+            }
+            const ThirdPersonCamera& activeThirdPersonCamera = enhancedCamera ?
+                thirdPersonCamera : legacyThirdPersonCamera;
+            const glm::vec3 cameraPosition = thirdPersonMode ? activeThirdPersonCamera.position() : camera.position();
+            const float cameraYaw = thirdPersonMode ? activeThirdPersonCamera.yawDegrees() : camera.yawDegrees();
+            const float cameraPitch = thirdPersonMode ? activeThirdPersonCamera.pitchDegrees() : camera.pitchDegrees();
+            const glm::mat4 view = thirdPersonMode ? activeThirdPersonCamera.viewMatrix() : camera.viewMatrix();
+            const glm::mat4 projection = thirdPersonMode ? activeThirdPersonCamera.projectionMatrix() : camera.projectionMatrix();
             debugPanel.setViewProjection(projection * view);
 
             renderer.setTransform(player.position, player.facingYaw);
             if (!animationFrozenThisFrame) renderer.updateAnimation(static_cast<float>(frameSeconds));
             debugPanel.beginFrame(static_cast<float>(frameSeconds), completedTicks, cameraPosition,
-                cameraYaw, cameraPitch, thirdPersonMode, player, resetBossRequested,
+                cameraYaw, cameraPitch, thirdPersonMode, enhancedCamera, player, resetBossRequested,
                 requestedSkillId,
                 statusCommand,
                 editorSkills, config.saveSkills, config.reloadSkills,

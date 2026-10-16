@@ -441,6 +441,7 @@ void DebugPanel::renderGameHud(const PlayerFrameState& player, std::string& requ
 
 void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
     const glm::vec3& cameraPosition, float cameraYaw, float cameraPitch, bool& thirdPersonMode,
+    bool& enhancedCamera,
     const PlayerFrameState& player, bool& resetBossRequested,
     std::string& requestedSkillId,
     std::string& statusCommand, std::vector<SkillEditorSkill>& editorSkills,
@@ -589,6 +590,7 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     ImGui::SeparatorText("Camera");
                     ImGui::Text("Mode: %s", thirdPersonMode ? "Third-Person" : "Free-Fly");
                     ImGui::Checkbox("Third-Person Camera (F1)", &thirdPersonMode);
+                    ImGui::Checkbox("Enhanced Shoulder Camera (compare old)", &enhancedCamera);
                     ImGui::Text("Position: %.2f, %.2f, %.2f | Yaw: %.1f | Pitch: %.1f",
                         cameraPosition.x, cameraPosition.y, cameraPosition.z, cameraYaw, cameraPitch);
 

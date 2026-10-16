@@ -10,11 +10,12 @@
 namespace glory::engine {
 
 struct ThirdPersonCameraConfig {
-    float distance = 4.5F;
-    glm::vec3 targetOffset{0.0F, 1.2F, 0.0F};
+    float distance = 5.0F;
+    float shoulderOffset = 0.5F;
+    glm::vec3 targetOffset{0.0F, 1.4F, 0.0F};
     float yawDegrees = -90.0F;
     float pitchDegrees = 12.0F;
-    float fieldOfViewDegrees = 45.0F;
+    float fieldOfViewDegrees = 65.0F;
     float aspectRatio = 16.0F / 9.0F;
     float nearPlane = 0.1F;
     float farPlane = 100.0F;
@@ -24,12 +25,14 @@ struct ThirdPersonCameraConfig {
 class ThirdPersonCamera {
 public:
     explicit ThirdPersonCamera(const ThirdPersonCameraConfig& config = {})
-        : distance_(config.distance), targetOffset_(config.targetOffset),
+        : distance_(config.distance), effectiveDistance_(config.distance),
+          shoulderOffset_(config.shoulderOffset), targetOffset_(config.targetOffset),
           yawDegrees_(config.yawDegrees), pitchDegrees_(config.pitchDegrees),
           fieldOfViewDegrees_(config.fieldOfViewDegrees), aspectRatio_(config.aspectRatio),
           nearPlane_(config.nearPlane), farPlane_(config.farPlane),
           mouseSensitivity_(config.mouseSensitivity) {
         if (!finite(targetOffset_) || !std::isfinite(distance_) || distance_ <= 0.0F ||
+            !std::isfinite(shoulderOffset_) ||
             !std::isfinite(yawDegrees_) || !std::isfinite(pitchDegrees_) ||
             !std::isfinite(fieldOfViewDegrees_) || fieldOfViewDegrees_ <= 0.0F ||
             fieldOfViewDegrees_ >= 180.0F || !std::isfinite(aspectRatio_) || aspectRatio_ <= 0.0F ||
@@ -68,6 +71,12 @@ public:
     }
 
     void setTarget(const glm::vec3& target) noexcept { if (finite(target)) target_ = target; }
+    void constrainArm(float maximumDistance, float deltaSeconds) noexcept {
+        if (!std::isfinite(maximumDistance) || !std::isfinite(deltaSeconds) || deltaSeconds < 0.0F) return;
+        const float safeDistance = std::clamp(maximumDistance, minimumArmDistance, distance_);
+        if (safeDistance < effectiveDistance_) effectiveDistance_ = safeDistance;
+        else effectiveDistance_ = std::min(safeDistance, effectiveDistance_ + deltaSeconds * armReturnSpeed);
+    }
     void setLocked(bool locked, const glm::vec3& lockTarget = glm::vec3(0.0F)) noexcept {
         locked_ = locked;
         if (finite(lockTarget)) lockTarget_ = lockTarget;
@@ -85,12 +94,25 @@ public:
         const float pitch = glm::radians(pitchDegrees_);
         const glm::vec3 forward{std::cos(yaw) * std::cos(pitch), std::sin(pitch),
             std::sin(yaw) * std::cos(pitch)};
-        return target_ + targetOffset_ - forward * distance_;
+        return targetPosition() - forward * effectiveDistance_;
     }
-    [[nodiscard]] glm::vec3 targetPosition() const noexcept { return target_ + targetOffset_; }
+    [[nodiscard]] glm::vec3 targetPosition() const noexcept {
+        const float yaw = glm::radians(yawDegrees_);
+        const glm::vec3 cameraRight{-std::sin(yaw), 0.0F, std::cos(yaw)};
+        return target_ + targetOffset_ + cameraRight * shoulderOffset_;
+    }
+    [[nodiscard]] glm::vec3 desiredPosition() const noexcept {
+        const float yaw = glm::radians(yawDegrees_);
+        const float pitch = glm::radians(pitchDegrees_);
+        const glm::vec3 forward{std::cos(yaw) * std::cos(pitch), std::sin(pitch),
+            std::sin(yaw) * std::cos(pitch)};
+        return targetPosition() - forward * distance_;
+    }
     [[nodiscard]] float yawDegrees() const noexcept { return yawDegrees_; }
     [[nodiscard]] float pitchDegrees() const noexcept { return pitchDegrees_; }
     [[nodiscard]] float distance() const noexcept { return distance_; }
+    [[nodiscard]] float fieldOfViewDegrees() const noexcept { return fieldOfViewDegrees_; }
+    [[nodiscard]] float effectiveDistance() const noexcept { return effectiveDistance_; }
     [[nodiscard]] float aspectRatio() const noexcept { return aspectRatio_; }
     [[nodiscard]] glm::mat4 viewMatrix() const { return glm::lookAt(position(), targetPosition(), worldUp); }
     [[nodiscard]] glm::mat4 projectionMatrix() const {
@@ -105,9 +127,13 @@ private:
 
     static constexpr float minimumPitchDegrees = -80.0F;
     static constexpr float maximumPitchDegrees = 80.0F;
+    static constexpr float minimumArmDistance = 0.35F;
+    static constexpr float armReturnSpeed = 8.0F;
     static constexpr glm::vec3 worldUp{0.0F, 1.0F, 0.0F};
     glm::vec3 target_{0.0F};
     float distance_;
+    float effectiveDistance_;
+    float shoulderOffset_;
     glm::vec3 targetOffset_;
     float yawDegrees_;
     float pitchDegrees_;

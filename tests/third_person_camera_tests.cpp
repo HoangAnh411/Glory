@@ -21,7 +21,13 @@ void testFollowOrbitAndMatrices() {
     const glm::vec3 position = camera.position();
     const glm::vec3 target = camera.targetPosition();
     expect(nearlyEqual(glm::length(position - target), camera.distance()), "camera maintains configured follow distance");
-    expect(nearlyEqual(target.x, 2.0F) && nearlyEqual(target.y, 1.2F), "camera target includes the character offset");
+    expect(nearlyEqual(target.x, 2.5F) && nearlyEqual(target.y, 1.4F), "camera target includes chest height and right shoulder offset");
+    expect(nearlyEqual(camera.distance(), 5.0F), "enhanced camera defaults to a five-meter arm");
+    expect(nearlyEqual(camera.fieldOfViewDegrees(), 65.0F), "enhanced camera default FOV is 65 degrees");
+    camera.constrainArm(2.0F, 0.016F);
+    expect(nearlyEqual(camera.effectiveDistance(), 2.0F), "camera arm retracts immediately at an obstruction");
+    camera.constrainArm(5.0F, 0.1F);
+    expect(nearlyEqual(camera.effectiveDistance(), 2.8F), "camera arm extends back smoothly after obstruction clears");
     camera.update({2.0F, 0.0F, 3.0F}, 100.0F, -100.0F);
     expect(nearlyEqual(camera.yawDegrees(), -80.0F) && nearlyEqual(camera.pitchDegrees(), 22.0F),
         "relative mouse deltas orbit the camera");
