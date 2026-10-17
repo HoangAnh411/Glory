@@ -18,7 +18,7 @@
       "id": "boss_start",
       "name": "Boss Start",
       "entityType": "Boss",
-      "position": [-3.8, 0.0, 0.0],
+      "position": [-12.0, 0.0, 0.0],
       "yaw": 90.0
     }
   ],

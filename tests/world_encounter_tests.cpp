@@ -29,7 +29,7 @@ int main() {
         world.saveToFile(tempPath);
         WorldEncounter roundTrip = WorldEncounter::loadFromFile(tempPath);
         require(roundTrip.findSpawn(SpawnEntityType::Boss) != nullptr &&
-            std::abs(roundTrip.findSpawn(SpawnEntityType::Boss)->position.x + 3.8F) < 1.0e-5F,
+            std::abs(roundTrip.findSpawn(SpawnEntityType::Boss)->position.x + 12.0F) < 1.0e-5F,
             "world serialization should preserve spawn positions");
 
         const auto box = std::find_if(roundTrip.triggerZones().begin(), roundTrip.triggerZones().end(),
@@ -89,6 +89,10 @@ int main() {
         require(rejectedInvalidShape, "unsupported trigger shape should fail loading");
         require(world.findSpawn(SpawnEntityType::Boss) != nullptr,
             "failed candidate reload must leave current world data usable");
+        const SpawnPoint* bossSpawn = world.findSpawn(SpawnEntityType::Boss);
+        require(bossSpawn != nullptr && playerSpawn != nullptr &&
+            glm::distance(bossSpawn->position, playerSpawn->position) >= 12.0F,
+            "player and boss spawn points must be separated by at least twelve meters");
 
         std::filesystem::remove(tempPath);
         std::cout << "World spawn, trigger validation, transitions, and placement tests passed\n";
