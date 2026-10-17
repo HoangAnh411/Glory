@@ -34,6 +34,12 @@ struct StaticWorldProp {
     glm::vec3 position{0.0F};
     float yaw = 0.0F;
     float scale = 1.0F;
+    std::size_t instanceIndex = 0;
+};
+struct RenderedWorldPropBounds {
+    std::string name;
+    glm::vec3 minimum{0.0F};
+    glm::vec3 maximum{0.0F};
 };
 struct CameraCollider {
     glm::vec3 minimum{0.0F};
@@ -56,6 +62,7 @@ public:
         const glm::vec3& desiredPosition, float cameraRadius = 0.2F) const noexcept;
     void setCameraColliders(std::vector<CameraCollider> colliders, glm::vec2 arenaCenter,
         float arenaRadius);
+    [[nodiscard]] std::vector<RenderedWorldPropBounds> renderedWorldPropBounds() const;
     [[nodiscard]] const std::string& cameraBlockerName() const noexcept { return cameraBlockerName_; }
     [[nodiscard]] const glm::vec3& cameraBlockerPosition() const noexcept { return cameraBlockerPosition_; }
     [[nodiscard]] float lastCameraObstructionDistance() const noexcept { return lastCameraObstructionDistance_; }

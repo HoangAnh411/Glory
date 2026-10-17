@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <limits>
 #include <string_view>
 #include <utility>
 #include <nlohmann/json.hpp>
@@ -319,8 +320,10 @@ ModelRenderer::ModelRenderer(const std::filesystem::path& path)
             file >> root;
             if (root.contains("props") && root["props"].is_array()) {
                 const auto modelsDir = path.parent_path();
+                std::size_t propIndex = 0;
                 for (const auto& item : root["props"]) {
                     StaticWorldProp prop;
+                    prop.instanceIndex = propIndex++;
                     prop.type = item.value("type", "");
                     if (item.contains("position") && item["position"].is_array() && item["position"].size() >= 3) {
                         prop.position = {item["position"][0].get<float>(), item["position"][1].get<float>(), item["position"][2].get<float>()};
@@ -473,7 +476,7 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
             shader_.setPbrMaterial(it->second->metallicFactor(), it->second->roughnessFactor(), it->second->ambientOcclusion());
             shader_.setEmissiveFactor(it->second->emissiveFactor());
             it->second->bindTexture(0);
-            const bool fadeForCamera = prop.type == cameraBlockerName_ &&
+            const bool fadeForCamera = cameraBlockerName_.starts_with(prop.type + "#") &&
                 glm::length(prop.position - cameraBlockerPosition_) < 0.01F;
             const GLint opacityLocation = gl_.getUniformLocation(shader_.program(), "u_Opacity");
             if (opacityLocation >= 0) gl_.uniform1f(opacityLocation, fadeForCamera ? 0.28F : 1.0F);
@@ -613,6 +616,32 @@ void ModelRenderer::setCameraColliders(std::vector<CameraCollider> colliders,
     cameraColliders_ = std::move(colliders);
     cameraArenaCenter_ = arenaCenter;
     cameraArenaRadius_ = std::isfinite(arenaRadius) ? std::max(0.0F, arenaRadius) : 0.0F;
+}
+
+std::vector<RenderedWorldPropBounds> ModelRenderer::renderedWorldPropBounds() const {
+    std::vector<RenderedWorldPropBounds> result;
+    result.reserve(staticProps_.size());
+    for (const StaticWorldProp& prop : staticProps_) {
+        const auto model = propModelTemplates_.find(prop.type);
+        if (model == propModelTemplates_.end() || !model->second) continue;
+        const auto [localMin, localMax] = model->second->localBounds();
+        const glm::mat4 transform = glm::translate(glm::mat4(1.0F), prop.position) *
+            glm::rotate(glm::mat4(1.0F), glm::radians(prop.yaw), glm::vec3(0.0F, 1.0F, 0.0F)) *
+            glm::scale(glm::mat4(1.0F), glm::vec3(prop.scale));
+        RenderedWorldPropBounds bounds;
+        bounds.name = prop.type + "#" + std::to_string(prop.instanceIndex);
+        bounds.minimum = glm::vec3(std::numeric_limits<float>::max());
+        bounds.maximum = glm::vec3(std::numeric_limits<float>::lowest());
+        for (int corner = 0; corner < 8; ++corner) {
+            const glm::vec3 local{(corner & 1) ? localMax.x : localMin.x,
+                (corner & 2) ? localMax.y : localMin.y, (corner & 4) ? localMax.z : localMin.z};
+            const glm::vec3 world = glm::vec3(transform * glm::vec4(local, 1.0F));
+            bounds.minimum = glm::min(bounds.minimum, world);
+            bounds.maximum = glm::max(bounds.maximum, world);
+        }
+        result.push_back(std::move(bounds));
+    }
+    return result;
 }
 
 void ModelRenderer::setShadowBias(float bias) noexcept {

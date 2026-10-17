@@ -216,6 +216,33 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
         for (const auto& box : config.collisionDebugBoxes)
             cameraColliders.push_back({box.minimum, box.maximum, box.name});
         renderer.setCameraColliders(std::move(cameraColliders), config.arenaCenter, config.arenaRadius);
+        std::cout << "[collision-bounds] rendered static prop AABBs versus loaded collision AABBs (m)\n";
+        for (const auto& rendered : renderer.renderedWorldPropBounds()) {
+            glm::vec3 colliderMin(std::numeric_limits<float>::max());
+            glm::vec3 colliderMax(std::numeric_limits<float>::lowest());
+            bool foundCollider = false;
+            for (const auto& box : config.collisionDebugBoxes) {
+                if (box.name != rendered.name) continue;
+                colliderMin = glm::min(colliderMin, box.minimum);
+                colliderMax = glm::max(colliderMax, box.maximum);
+                foundCollider = true;
+            }
+            if (!foundCollider) {
+                std::cout << "[collision-bounds] MISSING " << rendered.name << " render=["
+                          << rendered.minimum.x << ',' << rendered.minimum.y << ',' << rendered.minimum.z << ";"
+                          << rendered.maximum.x << ',' << rendered.maximum.y << ',' << rendered.maximum.z << "]\n";
+                continue;
+            }
+            const glm::vec3 error = glm::max(glm::abs(rendered.minimum - colliderMin),
+                glm::abs(rendered.maximum - colliderMax));
+            const float maxError = std::max({error.x, error.y, error.z});
+            std::cout << "[collision-bounds] " << (maxError > 0.15F ? "MISMATCH " : "OK ")
+                      << rendered.name << " render=[" << rendered.minimum.x << ',' << rendered.minimum.y << ','
+                      << rendered.minimum.z << ';' << rendered.maximum.x << ',' << rendered.maximum.y << ','
+                      << rendered.maximum.z << "] collider=[" << colliderMin.x << ',' << colliderMin.y << ','
+                      << colliderMin.z << ';' << colliderMax.x << ',' << colliderMax.y << ',' << colliderMax.z
+                      << "] maxError=" << maxError << " m\n";
+        }
         struct RemoteRenderer {
             std::unique_ptr<ModelRenderer> model;
             std::string animationState;
@@ -355,7 +382,9 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 ++completedTicks;
             });
 
-            constexpr std::array captureNames{"center_boss", "pillar", "wall", "toward_sun", "away_from_sun", "boss_near"};
+            constexpr std::array captureNames{"center_boss", "pillar", "wall", "toward_sun", "away_from_sun",
+                "boss_near", "arena_edge_0", "arena_edge_1", "arena_edge_2", "arena_edge_3",
+                "arena_edge_4", "arena_edge_5", "arena_edge_6", "arena_edge_7"};
             if (config.captureMode) {
                 const std::size_t scenario = captureIndex;
                 switch (scenario) {
@@ -364,7 +393,13 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 case 2: player.position = {33.0F, 0.0F, 0.0F}; player.bossPosition = {25.0F, 0.0F, 0.0F}; break;
                 case 3: player.position = {0.0F, 0.0F, 0.0F}; player.bossPosition = {-3.8F, 0.0F, 0.0F}; break;
                 case 4: player.position = {0.0F, 0.0F, 0.0F}; player.bossPosition = {-3.8F, 0.0F, 0.0F}; break;
-                default: player.position = {-2.0F, 0.0F, 0.0F}; player.bossPosition = {-3.8F, 0.0F, 0.0F}; break;
+                case 5: player.position = {-2.0F, 0.0F, 0.0F}; player.bossPosition = {-3.8F, 0.0F, 0.0F}; break;
+                default: {
+                    const float angle = static_cast<float>(scenario - 6) * 0.7853981633974483F;
+                    player.position = {std::cos(angle) * 33.0F, 0.0F, std::sin(angle) * 33.0F};
+                    player.bossPosition = {0.0F, 0.0F, 0.0F};
+                    break;
+                }
                 }
                 player.playerHp = 150.0F;
                 player.playerMaxHp = 150.0F;
@@ -373,7 +408,10 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 player.bossDefeated = false;
                 player.isMoving = false;
                 targetLockActive = scenario == 0;
-                constexpr std::array captureYaw{180.0F, -90.0F, 0.0F, 45.0F, -135.0F, 180.0F};
+                std::array captureYaw{180.0F, -90.0F, 0.0F, 45.0F, -135.0F, 180.0F,
+                    180.0F, -135.0F, -90.0F, -45.0F, 0.0F, 45.0F, 90.0F, 135.0F};
+                if (scenario >= 6)
+                    captureYaw[scenario] = std::atan2(-player.position.z, -player.position.x) * 57.2957795F;
                 thirdPersonCamera.setTarget(player.position);
                 thirdPersonCamera.setOrbitPose(captureYaw[scenario], 10.0F);
                 thirdPersonCamera.setLocked(targetLockActive, player.bossPosition);
@@ -593,7 +631,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                         }
                     }
                 }
-                if (captureMarkerInFrame && markerDetectedDistance > 2) {
+                if (captureMarkerInFrame && markerDetectedDistance > 2 && !config.captureCollisionDebug) {
                     (void)stbi_write_png("captures/hdr-marker-failure.png", width, height, 4,
                         pixels.data(), width * 4);
                     int closestX = -1;

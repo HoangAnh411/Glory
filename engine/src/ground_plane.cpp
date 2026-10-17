@@ -15,7 +15,7 @@ struct GroundVertex {
 };
 
 constexpr float floorY = 0.0F;
-constexpr float halfExtent = 120.0F;
+constexpr float halfExtent = 512.0F;
 constexpr std::array<GroundVertex, 6> vertices{{
     {{-halfExtent, floorY, -halfExtent}, {0.0F, 1.0F, 0.0F}, { 0.0F, 1.0F}, {1.0F, 1.0F, 1.0F, 1.0F}},
     {{ halfExtent, floorY,  halfExtent}, {0.0F, 1.0F, 0.0F}, { 1.0F, 0.0F}, {1.0F, 1.0F, 1.0F, 1.0F}},
