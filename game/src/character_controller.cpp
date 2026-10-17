@@ -170,6 +170,8 @@ void CharacterController::reset() noexcept {
 }
 
 void CharacterController::teleport(const glm::vec3& position, float yawDegrees) noexcept {
+    if (!std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z) ||
+        !std::isfinite(yawDegrees)) return;
     state_.position = position;
     state_.velocity = glm::vec3(0.0F);
     state_.facingYaw = yawDegrees;
@@ -182,6 +184,12 @@ void CharacterController::teleport(const glm::vec3& position, float yawDegrees) 
     state_.dodgeDirection = glm::vec3(0.0F);
     state_.externalKnockbackVelocity = glm::vec3(0.0F);
     state_.knockbackRemaining = 0.0F;
+    const CollisionResult corrected = collisionWorld_.resolve(
+        {state_.position, config_.capsuleRadius, config_.capsuleHeight}, state_.position, {},
+        config_.maximumStepHeight);
+    state_.position = corrected.position;
+    state_.isGrounded = corrected.isGrounded;
+    state_.collisionCount += corrected.contactCount;
 }
 
 void CharacterController::restoreNetworkState(const CharacterControllerState& state) noexcept {
@@ -195,6 +203,13 @@ void CharacterController::restoreNetworkState(const CharacterControllerState& st
         !std::isfinite(state.externalKnockbackVelocity.y) ||
         !std::isfinite(state.externalKnockbackVelocity.z) || !std::isfinite(state.knockbackRemaining)) return;
     state_ = state;
+    const CollisionResult corrected = collisionWorld_.resolve(
+        {state_.position, config_.capsuleRadius, config_.capsuleHeight}, state_.position,
+        state_.velocity, config_.maximumStepHeight);
+    state_.position = corrected.position;
+    state_.velocity = corrected.velocity;
+    state_.isGrounded = corrected.isGrounded;
+    state_.collisionCount += corrected.contactCount;
     state_.dodgeElapsed = std::max(0.0F, state_.dodgeElapsed);
     state_.dodgeCooldownRemaining = std::max(0.0F, state_.dodgeCooldownRemaining);
     const glm::vec2 horizontalVelocity{state_.velocity.x, state_.velocity.z};

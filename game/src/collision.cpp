@@ -5,8 +5,10 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <fstream>
+#include <iostream>
 #include <limits>
 #include <stdexcept>
 
@@ -157,7 +159,9 @@ CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldM
     Json worldMap;
     worldFile >> worldMap;
     const float pi = std::acos(-1.0F);
+    std::size_t propIndex = 0;
     for (const auto& prop : worldMap.value("props", Json::array())) {
+        const std::size_t currentPropIndex = propIndex++;
         const auto position = prop.value("position", Json::array());
         if (!position.is_array() || position.size() < 3) continue;
         const glm::vec3 origin{position[0].get<float>(), position[1].get<float>(), position[2].get<float>()};
@@ -181,7 +185,7 @@ CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldM
             }
             world.addObstacle({{minX, origin.y + localMin.y * scale, minZ},
                 {maxX, origin.y + localMax.y * scale, maxZ}, false,
-                prop.value("type", std::string("world prop"))});
+                prop.value("type", std::string("world prop")) + "#" + std::to_string(currentPropIndex)});
         };
         if (prop.contains("collision")) addLocalBounds(prop["collision"]);
         if (prop.contains("multi_collision") && prop["multi_collision"].is_array())
@@ -292,11 +296,45 @@ CollisionResult CollisionWorld::resolve(const Capsule& capsule, const glm::vec3&
             ++result.contactCount;
         }
 
+        // Resolve the deepest overlap first so adjacent/overlapping boxes cannot push
+        // the capsule back and forth according to collider insertion order.
+        for (std::size_t pass = 0; pass < obstacles_.size() * 2U; ++pass) {
+            const Aabb* deepest = nullptr;
+            float maximumPenetration = 0.0F;
+            for (const Aabb& obstacle : obstacles_) {
+                if (!overlapsVertically(capsule, candidate, obstacle) ||
+                    !overlapsCircleXZ(candidate, capsule.radius, obstacle)) continue;
+                const float closestX = std::clamp(candidate.x, obstacle.minimum.x, obstacle.maximum.x);
+                const float closestZ = std::clamp(candidate.z, obstacle.minimum.z, obstacle.maximum.z);
+                const float distance = glm::length(glm::vec2{candidate.x - closestX, candidate.z - closestZ});
+                const float penetration = distance > contactEpsilon ? capsule.radius - distance :
+                    capsule.radius + std::min({candidate.x - obstacle.minimum.x,
+                        obstacle.maximum.x - candidate.x, candidate.z - obstacle.minimum.z,
+                        obstacle.maximum.z - candidate.z});
+                if (penetration > maximumPenetration) {
+                    maximumPenetration = penetration;
+                    deepest = &obstacle;
+                }
+            }
+            if (deepest == nullptr) break;
+            glm::vec3 separated = candidate;
+            (void)separationNormal(candidate, *deepest, capsule.radius, separated);
+            candidate = separated;
+            ++result.contactCount;
+        }
+
         if (arenaRadius_ > capsule.radius) {
             glm::vec2 offset{candidate.x - arenaCenter_.x, candidate.z - arenaCenter_.y};
             const float distance = glm::length(offset);
             const float allowedRadius = arenaRadius_ - capsule.radius;
             if (distance > allowedRadius && distance > contactEpsilon) {
+                if (distance > arenaRadius_ + 0.5F) {
+                    static std::atomic_flag warnedAboutArenaCorrection = ATOMIC_FLAG_INIT;
+                    if (!warnedAboutArenaCorrection.test_and_set()) {
+                        std::cerr << "[collision warning] actor was " << (distance - arenaRadius_)
+                                  << " m outside arena safety radius; correcting to the nearest valid point\n";
+                    }
+                }
                 const glm::vec2 outward = offset / distance;
                 candidate.x = arenaCenter_.x + outward.x * allowedRadius;
                 candidate.z = arenaCenter_.y + outward.y * allowedRadius;

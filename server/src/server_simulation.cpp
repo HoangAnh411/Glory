@@ -44,8 +44,10 @@ const char* bossPhaseName(game::BossPhase phase) {
 } // namespace
 
 struct ServerSimulation::PlayerSession {
-    PlayerSession(std::uint32_t id, game::SkillRegistry skills, const glm::vec3& spawn, float yaw)
-        : clientId(id), controller(), combat(std::move(skills), makePlayerTarget(id, spawn)) {
+    PlayerSession(std::uint32_t id, game::SkillRegistry skills, const glm::vec3& spawn, float yaw,
+        const game::CollisionWorld& collisionWorld)
+        : clientId(id), controller(), combat(std::move(skills), makePlayerTarget(id, spawn), collisionWorld) {
+        controller.setCollisionWorld(collisionWorld);
         controller.teleport(spawn, yaw);
     }
 
@@ -76,10 +78,14 @@ ServerSimulation::~ServerSimulation() = default;
 
 ServerSimulation::ServerSimulation(const std::filesystem::path& worldPath,
     const std::filesystem::path& skillsPath)
-    : world_(game::WorldEncounter::loadFromFile(worldPath)),
+    : collisionWorld_(game::CollisionWorld::loadFromFiles(worldPath.parent_path() / "world_map.json",
+          worldPath.parent_path() / "world_colliders.json")),
+      world_(game::WorldEncounter::loadFromFile(worldPath)),
       boss_(makeBossConfig(world_)),
-      combat_(game::SkillRegistry::loadFromFile(skillsPath), makeBossTarget(boss_)),
+      combat_(game::SkillRegistry::loadFromFile(skillsPath), makeBossTarget(boss_), collisionWorld_),
       playerSkills_(game::SkillRegistry::loadFromFile(skillsPath)) {
+    controller_.setCollisionWorld(collisionWorld_);
+    boss_.setCollisionWorld(collisionWorld_);
     if (const auto* playerSpawn = world_.findSpawn(game::SpawnEntityType::Player))
         controller_.teleport(playerSpawn->position, playerSpawn->yaw);
     recordWorldHistory();
@@ -149,7 +155,7 @@ bool ServerSimulation::connectPlayer(std::uint32_t clientId) {
         {1.0F, 0.0F, -1.0F}, {0.0F, 0.0F, 2.0F}
     }};
     const glm::vec3 position = base + offsets[slot];
-    auto session = std::make_unique<PlayerSession>(clientId, playerSkills_, position, baseYaw);
+    auto session = std::make_unique<PlayerSession>(clientId, playerSkills_, position, baseYaw, collisionWorld_);
     session->clientSlot = slot;
     players_.emplace(clientId, std::move(session));
     recordWorldHistory();
@@ -167,13 +173,14 @@ bool ServerSimulation::applyCharacterClass(std::uint32_t clientId,
     config.moveSpeed = definition.moveSpeed;
     config.dodgeCooldown = definition.dodgeCooldown;
     session.controller = game::CharacterController(config);
+    session.controller.setCollisionWorld(collisionWorld_);
     session.controller.teleport(position, yaw);
     session.maxHp = definition.baseHp;
     session.hp = definition.baseHp;
     session.attack = definition.baseAttack;
     session.defense = definition.baseDefense;
     session.maximumMoveSpeed = definition.moveSpeed;
-    session.combat = game::CombatSystem(std::move(skills), makePlayerTarget(clientId, position));
+    session.combat = game::CombatSystem(std::move(skills), makePlayerTarget(clientId, position), collisionWorld_);
     return true;
 }
 

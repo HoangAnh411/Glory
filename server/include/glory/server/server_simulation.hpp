@@ -114,6 +114,7 @@ private:
 
     game::Simulation simulation_;
     game::ActionMap actionMap_;
+    game::CollisionWorld collisionWorld_;
     game::CharacterController controller_;
     game::WorldEncounter world_;
     game::StatusEffectManager playerEffects_;

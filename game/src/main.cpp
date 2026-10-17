@@ -25,6 +25,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <stb_image_write.h>
 #include <nlohmann/json.hpp>
 
 namespace {
@@ -61,6 +62,19 @@ StatusEffectKind effectKind(const std::string& type) {
     if (type == "Stun") return StatusEffectKind::Stun;
     if (type == "ArmorBreak") return StatusEffectKind::ArmorBreak;
     throw std::runtime_error("Unknown status effect type: " + type);
+}
+
+std::filesystem::path locateAssetRoot(const char* executablePath) {
+    const auto executable = std::filesystem::absolute(executablePath).parent_path();
+    const std::array<std::filesystem::path, 3> candidates{
+        executable / "assets", executable.parent_path() / "assets", std::filesystem::path(GLORY_ASSET_DIR)};
+    for (const auto& candidate : candidates) {
+        if (std::filesystem::exists(candidate / "data" / "world_map.json") &&
+            std::filesystem::exists(candidate / "data" / "world_colliders.json"))
+            return std::filesystem::weakly_canonical(candidate);
+    }
+    throw std::runtime_error("[COLLISION FATAL] Could not locate assets/data/world_map.json and "
+        "assets/data/world_colliders.json beside the executable or in the configured asset directory.");
 }
 
 std::vector<SkillEditorSkill> toEditorSkills(const glory::game::SkillRegistry& registry) {
@@ -212,17 +226,26 @@ glory::game::WorldEncounter fromWorldEditorData(const std::vector<WorldEditorSpa
 
 int main(int argc, char* argv[]) {
     glory::engine::ApplicationConfig config;
-    const auto warriorModelPath = std::filesystem::path(GLORY_ASSET_DIR) / "models" / "hero_warrior.gltf";
+    std::filesystem::path assetRoot;
+    try {
+        assetRoot = locateAssetRoot(argv[0]);
+        std::cout << "[collision] working directory=" << std::filesystem::current_path().string()
+                  << "\n[collision] asset root=" << assetRoot.string() << '\n';
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
+    const auto warriorModelPath = assetRoot / "models" / "hero_warrior.gltf";
     config.modelPath = std::filesystem::exists(warriorModelPath)
         ? warriorModelPath
-        : std::filesystem::path(GLORY_ASSET_DIR) / "models" / "starter_crate.gltf";
-    const auto bossModelPath = std::filesystem::path(GLORY_ASSET_DIR) / "models" / "boss_gorgon.gltf";
+        : assetRoot / "models" / "starter_crate.gltf";
+    const auto bossModelPath = assetRoot / "models" / "boss_gorgon.gltf";
     config.bossModelPath = std::filesystem::exists(bossModelPath)
         ? bossModelPath
-        : std::filesystem::path(GLORY_ASSET_DIR) / "models" / "static_crate.gltf";
-    config.audioDirectory = std::filesystem::path(GLORY_ASSET_DIR) / "audio";
-    config.skillsPath = std::filesystem::path(GLORY_ASSET_DIR) / "data" / "skills.json";
-    config.worldSpawnsPath = std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_spawns.json";
+        : assetRoot / "models" / "static_crate.gltf";
+    config.audioDirectory = assetRoot / "audio";
+    config.skillsPath = assetRoot / "data" / "skills.json";
+    config.worldSpawnsPath = assetRoot / "data" / "world_spawns.json";
     glory::engine::AccountPanelState accountPanel;
     glory::engine::InventoryPanelState inventoryPanel;
     glory::engine::ZonePanelState zonePanel;
@@ -239,6 +262,7 @@ int main(int argc, char* argv[]) {
     config.feedbackPanel = &feedbackPanel;
     std::string connectHost;
     std::uint16_t connectPort = 7777;
+    bool walkTestMode = false;
     for (int index = 1; index < argc; ++index) {
         if (std::strcmp(argv[index], "--smoke-test") == 0) {
             config.smokeTestTickLimit = 120;
@@ -250,28 +274,34 @@ int main(int argc, char* argv[]) {
             config.windowWidth = 1920;
             config.windowHeight = 1080;
             config.captureMode = true;
+            config.captureCollisionDebug = true;
         } else if (std::strcmp(argv[index], "--capture-no-hdr") == 0) {
             config.windowWidth = 1920;
             config.windowHeight = 1080;
             config.captureMode = true;
             config.captureHdrEnabled = false;
+            config.captureCollisionDebug = true;
         } else if (std::strcmp(argv[index], "--capture-720p") == 0) {
             config.windowWidth = 1280;
             config.windowHeight = 720;
             config.captureMode = true;
             config.captureSuffix = "_1280x720";
+            config.captureCollisionDebug = true;
         } else if (std::strcmp(argv[index], "--capture-high-dpi") == 0) {
             config.windowWidth = 1920;
             config.windowHeight = 1080;
             config.captureMode = true;
             config.highPixelDensity = true;
             config.captureSuffix = "_high_dpi";
+            config.captureCollisionDebug = true;
         } else if (std::strcmp(argv[index], "--capture-colliders") == 0) {
             config.windowWidth = 1920;
             config.windowHeight = 1080;
             config.captureMode = true;
             config.captureCollisionDebug = true;
             config.captureSuffix = "_colliders";
+        } else if (std::strcmp(argv[index], "--walk-test") == 0) {
+            walkTestMode = true;
         } else if (std::strcmp(argv[index], "--connect") == 0 && index + 1 < argc) {
             const std::string endpoint(argv[++index]);
             const std::size_t separator = endpoint.rfind(':');
@@ -290,7 +320,7 @@ int main(int argc, char* argv[]) {
             connectHost = endpoint.substr(0, separator);
             connectPort = static_cast<std::uint16_t>(parsedPort);
         } else {
-            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture|--capture-no-hdr|--capture-720p|--capture-high-dpi|--capture-colliders] [--connect IPv4:port]\n";
+            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture|--capture-no-hdr|--capture-720p|--capture-high-dpi|--capture-colliders|--walk-test] [--connect IPv4:port]\n";
             return 2;
         }
     }
@@ -318,10 +348,10 @@ int main(int argc, char* argv[]) {
         }
     }
     const glory::game::ItemCatalog itemCatalog = glory::game::ItemCatalog::loadFromFile(
-        std::filesystem::path(GLORY_ASSET_DIR) / "data" / "items.json");
+        assetRoot / "data" / "items.json");
     const auto allClassSkills = glory::game::SkillRegistry::loadFromFile(config.skillsPath);
     const auto classCatalog = glory::game::ClassCatalog::loadFromFile(
-        std::filesystem::path(GLORY_ASSET_DIR) / "data" / "classes.json", allClassSkills);
+        assetRoot / "data" / "classes.json", allClassSkills);
     for (const auto& definition : classCatalog.classes()) {
         glory::engine::ClassChoiceView choice;
         choice.name = definition.name;
@@ -525,9 +555,27 @@ int main(int argc, char* argv[]) {
     glory::game::Simulation simulation;
     glory::game::ActionMap actionMap;
     glory::game::CharacterController controller;
-    const auto collisionWorld = glory::game::CollisionWorld::loadFromFiles(
-        std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_map.json",
-        std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_colliders.json");
+    const auto worldMapPath = assetRoot / "data" / "world_map.json";
+    const auto worldColliderPath = assetRoot / "data" / "world_colliders.json";
+    glory::game::CollisionWorld collisionWorld;
+    try {
+        collisionWorld = glory::game::CollisionWorld::loadFromFiles(worldMapPath, worldColliderPath);
+    } catch (const std::exception& error) {
+        std::cerr << "[COLLISION FATAL] map=" << std::filesystem::absolute(worldMapPath).string()
+                  << " colliders=" << std::filesystem::absolute(worldColliderPath).string()
+                  << " error=" << error.what() << '\n';
+        return 1;
+    }
+    if (collisionWorld.obstacles().empty() || collisionWorld.arenaRadius() <= 0.0F) {
+        std::cerr << "[COLLISION FATAL] Loaded zero world colliders or invalid arena boundary from "
+                  << std::filesystem::absolute(worldColliderPath).string() << '\n';
+        return 1;
+    }
+    std::cout << "[collision] map=" << std::filesystem::absolute(worldMapPath).string()
+              << "\n[collision] colliders=" << std::filesystem::absolute(worldColliderPath).string()
+              << " count=" << collisionWorld.obstacles().size()
+              << " arenaCenter=(" << collisionWorld.arenaCenter().x << ',' << collisionWorld.arenaCenter().y
+              << ") radius=" << collisionWorld.arenaRadius() << " noclip=off\n";
     controller.setCollisionWorld(collisionWorld);
     config.arenaCenter = collisionWorld.arenaCenter();
     config.arenaRadius = collisionWorld.arenaRadius();
@@ -561,7 +609,7 @@ int main(int argc, char* argv[]) {
     glory::game::SkillRegistry skillRegistry = glory::game::SkillRegistry::loadFromFile(config.skillsPath);
     config.editorSkills = toEditorSkills(skillRegistry);
     glory::game::CombatSystem combat(std::move(skillRegistry),
-        glory::game::CombatTarget{8, {boss.position(), 0.55F, 2.2F}, 300.0F, 300.0F, 0});
+        glory::game::CombatTarget{8, {boss.position(), 0.55F, 2.2F}, 300.0F, 300.0F, 0}, collisionWorld);
     const auto applyWorldSpawns = [&]() {
         if (const auto* playerSpawn = worldEncounter.findSpawn(glory::game::SpawnEntityType::Player))
             controller.teleport(playerSpawn->position, playerSpawn->yaw);
@@ -577,40 +625,6 @@ int main(int argc, char* argv[]) {
     };
     applyWorldSpawns();
 
-    const auto worldMapPath = std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_map.json";
-    if (std::filesystem::exists(worldMapPath)) {
-        try {
-            std::ifstream file(worldMapPath);
-            nlohmann::json root;
-            file >> root;
-            if (root.contains("props") && root["props"].is_array()) {
-                for (const auto& item : root["props"]) {
-                    glm::vec3 pos{0.0F};
-                    if (item.contains("position") && item["position"].is_array() && item["position"].size() >= 3) {
-                        pos = {item["position"][0].get<float>(), item["position"][1].get<float>(), item["position"][2].get<float>()};
-                    }
-                    if (item.contains("collision") && item["collision"].is_array() && item["collision"].size() >= 6) {
-                        const auto& c = item["collision"];
-                        glory::game::Aabb aabb;
-                        aabb.minimum = pos + glm::vec3{c[0].get<float>(), c[1].get<float>(), c[2].get<float>()};
-                        aabb.maximum = pos + glm::vec3{c[3].get<float>(), c[4].get<float>(), c[5].get<float>()};
-                        controller.addObstacle(aabb);
-                    }
-                    if (item.contains("multi_collision") && item["multi_collision"].is_array()) {
-                        for (const auto& c : item["multi_collision"]) {
-                            if (c.is_array() && c.size() >= 6) {
-                                glory::game::Aabb aabb;
-                                aabb.minimum = pos + glm::vec3{c[0].get<float>(), c[1].get<float>(), c[2].get<float>()};
-                                aabb.maximum = pos + glm::vec3{c[3].get<float>(), c[4].get<float>(), c[5].get<float>()};
-                                controller.addObstacle(aabb);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (...) {
-        }
-    }
     config.saveSkills = [&](const std::vector<SkillEditorSkill>& skills, std::string& error) {
         try {
             auto updated = fromEditorSkills(skills);
@@ -671,7 +685,7 @@ int main(int argc, char* argv[]) {
     std::uint64_t networkTick = 0;
     glory::network::AntiCheatWarningPacket latestAntiCheatWarning;
     std::string latestAntiCheatMessage;
-    const int result = glory::engine::runApplication(config, [&](
+    const auto fixedUpdate = [&](
         double fixedDeltaSeconds,
         const glory::input::InputFrame& inputFrame,
         float cameraYawDegrees,
@@ -1208,7 +1222,7 @@ int main(int argc, char* argv[]) {
             playerHealth = activeClass ? activeClass->baseHp : 100.0F;
             playerEffects.clear();
             const auto& respawned = controller.state();
-            worldEncounter.updateTriggers(respawned.position);
+            (void)worldEncounter.updateTriggers(respawned.position);
         }
         const auto triggerEvents = worldEncounter.updateTriggers(state.position);
         for (const auto& triggerEvent : triggerEvents) {
@@ -1337,7 +1351,175 @@ int main(int argc, char* argv[]) {
         if (bossResult.playerDamage > 0.0F)
             frame.hitEvents.push_back({state.position + glm::vec3(0.0F, 1.0F, 0.0F), -bossResult.playerDamage});
         return frame;
-    });
+    };
+
+    int result = 0;
+    if (walkTestMode) {
+        if (networkClient) {
+            std::cerr << "--walk-test requires offline mode so it can exercise this process's live update callback.\n";
+            return 2;
+        }
+        const auto* playerSpawn = worldEncounter.findSpawn(glory::game::SpawnEntityType::Player);
+        if (!playerSpawn) {
+            std::cerr << "--walk-test requires a player spawn in world_spawns.json.\n";
+            return 1;
+        }
+        bool failed = false;
+        std::string firstFailure;
+        std::filesystem::create_directories("captures");
+        for (const int renderFps : {30, 60, 144}) {
+            std::vector<glm::vec3> playerTrail;
+            std::vector<glm::vec3> bossTrail;
+            std::uint64_t fixedStep = 0;
+            const double fixedDelta = 1.0 / 60.0;
+            for (int directionIndex = 0; directionIndex < 16; ++directionIndex) {
+                controller.teleport(playerSpawn->position, playerSpawn->yaw);
+                playerHealth = activeClass ? activeClass->baseHp : 150.0F;
+                boss.reset();
+                boss.setCollisionWorld(collisionWorld);
+                boss.setHealth(149.0F);
+                combat.resetEncounter();
+                combat.dummy().hurtbox = {boss.position(), boss.hurtbox().radius, boss.hurtbox().height};
+                combat.dummy().currentHp = boss.currentHp();
+                bossEncounterActive = true;
+                bossActivationDelayRemaining = 0.0F;
+
+                double accumulator = 0.0;
+                double elapsed = 0.0;
+                const int renderFrames = renderFps * 20;
+                for (int renderFrame = 0; renderFrame < renderFrames; ++renderFrame) {
+                    const double frameDelta = 1.0 / static_cast<double>(renderFps);
+                    accumulator += frameDelta;
+                    const double frameTime = elapsed + frameDelta;
+                    constexpr float sectorRadians = 0.39269908169872414F;
+                    const float angle = static_cast<float>(directionIndex) * sectorRadians;
+                    const glm::vec2 worldDirection{std::cos(angle), std::sin(angle)};
+                    glory::input::InputFrame scriptedInput;
+                    if (frameTime < 6.25) {
+                        const float forward = -worldDirection.y;
+                        const float right = worldDirection.x;
+                        if (forward > 0.35F) scriptedInput.held.push_back(glory::input::Control::KeyW);
+                        if (forward < -0.35F) scriptedInput.held.push_back(glory::input::Control::KeyS);
+                        if (right > 0.35F) scriptedInput.held.push_back(glory::input::Control::KeyD);
+                        if (right < -0.35F) scriptedInput.held.push_back(glory::input::Control::KeyA);
+                    }
+                    if (frameTime >= 5.9 && frameTime < 5.9 + frameDelta)
+                        scriptedInput.pressed.push_back(glory::input::Control::KeyLeftShift);
+                    while (accumulator + 1.0e-9 >= fixedDelta) {
+                        const auto frame = fixedUpdate(fixedDelta, scriptedInput, -90.0F,
+                            false, {}, {}, false);
+                        const auto& player = controller.state();
+                        const auto& bossPosition = boss.position();
+                        playerTrail.push_back(player.position);
+                        bossTrail.push_back(bossPosition);
+                        ++fixedStep;
+                        const auto validateActor = [&](const char* actorName, const glm::vec3& position,
+                            const glory::game::Capsule& capsule) {
+                            const glm::vec2 offset{position.x - collisionWorld.arenaCenter().x,
+                                position.z - collisionWorld.arenaCenter().y};
+                            const float radial = glm::length(offset);
+                            const auto corrected = collisionWorld.resolve(capsule, position, {});
+                            if (radial > collisionWorld.arenaRadius() - capsule.radius + 0.02F ||
+                                glm::distance(corrected.position, position) > 0.02F) {
+                                std::string blocker = "arena boundary";
+                                for (const auto& box : collisionWorld.obstacles()) {
+                                    const float x = std::clamp(position.x, box.minimum.x, box.maximum.x);
+                                    const float z = std::clamp(position.z, box.minimum.z, box.maximum.z);
+                                    if (glm::length(glm::vec2{position.x - x, position.z - z}) < capsule.radius + 0.05F &&
+                                        position.y < box.maximum.y && position.y + capsule.height > box.minimum.y) {
+                                        blocker = box.name;
+                                        break;
+                                    }
+                                }
+                                if (!failed) {
+                                    failed = true;
+                                    firstFailure = "fps=" + std::to_string(renderFps) + " step=" +
+                                        std::to_string(fixedStep) + " actor=" + actorName + " position=(" +
+                                        std::to_string(position.x) + "," + std::to_string(position.y) + "," +
+                                        std::to_string(position.z) + ") blocker=" + blocker;
+                                }
+                            }
+                        };
+                        validateActor("player", player.position, {player.position, 0.4F, 1.8F});
+                        validateActor("boss", bossPosition,
+                            {bossPosition, boss.hurtbox().radius, boss.hurtbox().height});
+                        accumulator -= fixedDelta;
+                    }
+                    elapsed += frameDelta;
+                }
+            }
+
+            constexpr int imageSize = 1024;
+            constexpr float worldScale = 13.0F;
+            std::vector<unsigned char> image(imageSize * imageSize * 3, 22);
+            const auto pixel = [&](int x, int y, std::array<unsigned char, 3> color) {
+                if (x < 0 || x >= imageSize || y < 0 || y >= imageSize) return;
+                const std::size_t offset = (static_cast<std::size_t>(y) * imageSize + x) * 3;
+                image[offset] = color[0]; image[offset + 1] = color[1]; image[offset + 2] = color[2];
+            };
+            const auto worldPixel = [](const glm::vec3& position) {
+                return glm::ivec2{imageSize / 2 + static_cast<int>(position.x * worldScale),
+                    imageSize / 2 + static_cast<int>(position.z * worldScale)};
+            };
+            const auto line = [&](glm::ivec2 a, glm::ivec2 b, std::array<unsigned char, 3> color) {
+                const int dx = std::abs(b.x - a.x), sx = a.x < b.x ? 1 : -1;
+                const int dy = -std::abs(b.y - a.y), sy = a.y < b.y ? 1 : -1;
+                int error = dx + dy;
+                for (;;) {
+                    pixel(a.x, a.y, color);
+                    if (a.x == b.x && a.y == b.y) break;
+                    const int twice = 2 * error;
+                    if (twice >= dy) { error += dy; a.x += sx; }
+                    if (twice <= dx) { error += dx; a.y += sy; }
+                }
+            };
+            for (int angle = 0; angle < 360; ++angle) {
+                constexpr float degreesToRadians = 0.01745329251994329577F;
+                const float radians = static_cast<float>(angle) * degreesToRadians;
+                const auto a = worldPixel({collisionWorld.arenaCenter().x + collisionWorld.arenaRadius() *
+                    std::cos(radians), 0.0F, collisionWorld.arenaCenter().y + collisionWorld.arenaRadius() *
+                    std::sin(radians)});
+                const float next = static_cast<float>(angle + 1) * degreesToRadians;
+                const auto b = worldPixel({collisionWorld.arenaCenter().x + collisionWorld.arenaRadius() *
+                    std::cos(next), 0.0F, collisionWorld.arenaCenter().y + collisionWorld.arenaRadius() *
+                    std::sin(next)});
+                line(a, b, {230, 230, 230});
+            }
+            for (const auto& box : collisionWorld.obstacles()) {
+                const auto a = worldPixel({box.minimum.x, 0.0F, box.minimum.z});
+                const auto b = worldPixel({box.maximum.x, 0.0F, box.maximum.z});
+                line({a.x, a.y}, {b.x, a.y}, {80, 190, 100});
+                line({b.x, a.y}, {b.x, b.y}, {80, 190, 100});
+                line({b.x, b.y}, {a.x, b.y}, {80, 190, 100});
+                line({a.x, b.y}, {a.x, a.y}, {80, 190, 100});
+            }
+            for (std::size_t i = 1; i < playerTrail.size(); ++i)
+                line(worldPixel(playerTrail[i - 1]), worldPixel(playerTrail[i]), {40, 190, 255});
+            for (std::size_t i = 1; i < bossTrail.size(); ++i)
+                line(worldPixel(bossTrail[i - 1]), worldPixel(bossTrail[i]), {255, 85, 65});
+            const std::string suffix = std::to_string(renderFps);
+            const auto pngPath = std::filesystem::path("captures") / ("walk-test-" + suffix + ".png");
+            const auto jsonPath = std::filesystem::path("captures") / ("walk-test-" + suffix + ".json");
+            stbi_write_png(pngPath.string().c_str(), imageSize, imageSize, 3, image.data(), imageSize * 3);
+            nlohmann::json trace{{"render_fps", renderFps}, {"fixed_steps", fixedStep},
+                {"arena_center", {collisionWorld.arenaCenter().x, collisionWorld.arenaCenter().y}},
+                {"arena_radius", collisionWorld.arenaRadius()}, {"player_positions", nlohmann::json::array()},
+                {"boss_positions", nlohmann::json::array()}};
+            for (const auto& position : playerTrail)
+                trace["player_positions"].push_back({position.x, position.y, position.z});
+            for (const auto& position : bossTrail)
+                trace["boss_positions"].push_back({position.x, position.y, position.z});
+            trace["passed"] = !failed;
+            trace["failure"] = failed ? firstFailure : "";
+            std::ofstream jsonFile(jsonPath);
+            jsonFile << trace.dump(2) << '\n';
+            std::cout << "--walk-test " << renderFps << " FPS: " << (failed ? "FAIL " + firstFailure : "PASS")
+                      << ", fixed steps=" << fixedStep << ", trace=" << pngPath.string() << '\n';
+        }
+        if (failed) return 1;
+    } else {
+        result = glory::engine::runApplication(config, fixedUpdate);
+    }
 
     if (result == 0 && config.smokeTestTickLimit != 0) {
         if (simulation.tickCount() != config.smokeTestTickLimit) {

@@ -187,6 +187,7 @@ target_compile_features(glory_engine PUBLIC cxx_std_20)
 target_link_libraries(glory_engine PUBLIC SDL3::SDL3-static OpenGL::GL glm::glm nlohmann_json::nlohmann_json PRIVATE glory_imgui)
 
 add_executable(glory_client game/src/main.cpp)
+target_include_directories(glory_client PRIVATE ${stb_SOURCE_DIR})
 target_compile_definitions(glory_client PRIVATE GLORY_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets")
 target_compile_features(glory_client PRIVATE cxx_std_20)
 target_link_libraries(glory_client PRIVATE glory_engine glory_game glory_network)
