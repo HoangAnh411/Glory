@@ -91,6 +91,7 @@ Platform (window, input, thời gian)
 - [x] Va chạm capsule với địa hình
 - [x] World collision upgrade: C1 static collider data/debug, C2 player move-and-slide and arena enforcement, C3 boss movement/separation and shared camera colliders complete.
 - [x] Runtime collision re-audit: live client/server use the loaded 76-prop map, and walk-test plus eight arena-edge collider captures pass at 30/60/144 FPS. Decorative bushes and broad hill/cliff bounds are non-blocking, tree collision uses trunk-sized bounds, and solid props remain blockers. The radius-34 arena boundary remains a circular safety clamp.
+- [x] World collision openings and wall sections: instance compound colliders leave both village gate openings traversable while their supports and six near-arena cliff-wall sections block movement; live route captures and CPU tests pass.
 - [x] Hitbox và hurtbox gắn theo animation
 - [x] Skill data-driven: đọc từ JSON (sát thương, cooldown, cast time)
 - [x] Combo và cửa sổ hủy chiêu (cancel window)

@@ -161,6 +161,7 @@ CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldM
     const float pi = std::acos(-1.0F);
     const auto nonBlockingTypes = colliderData.value("nonBlockingTypes", std::vector<std::string>{});
     const auto colliderOverrides = colliderData.value("colliderOverrides", Json::object());
+    const auto instanceOverrides = colliderData.value("instanceOverrides", Json::object());
     std::size_t propIndex = 0;
     for (const auto& prop : worldMap.value("props", Json::array())) {
         const std::size_t currentPropIndex = propIndex++;
@@ -190,11 +191,20 @@ CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldM
                 {maxX, origin.y + localMax.y * scale, maxZ}, false,
                 propType + "#" + std::to_string(currentPropIndex), blocksMovement});
         };
-        const bool blocksMovement = std::find(nonBlockingTypes.begin(), nonBlockingTypes.end(), propType) ==
+        const bool typeBlocksMovement = std::find(nonBlockingTypes.begin(), nonBlockingTypes.end(), propType) ==
             nonBlockingTypes.end();
-        const auto override = colliderOverrides.find(propType);
-        if (override != colliderOverrides.end() && override->contains("bounds")) {
-            addLocalBounds((*override)["bounds"], override->value("blocksMovement", blocksMovement));
+        const auto typeOverride = colliderOverrides.find(propType);
+        const std::string instanceKey = propType + "#" + std::to_string(currentPropIndex);
+        const auto instanceOverride = instanceOverrides.find(instanceKey);
+        const Json* override = instanceOverride != instanceOverrides.end() ? &*instanceOverride :
+            (typeOverride != colliderOverrides.end() ? &*typeOverride : nullptr);
+        const bool blocksMovement = override != nullptr
+            ? override->value("blocksMovement", typeBlocksMovement) : typeBlocksMovement;
+        if (override != nullptr && override->contains("parts") && (*override)["parts"].is_array()) {
+            for (const auto& bounds : (*override)["parts"])
+                addLocalBounds(bounds, blocksMovement);
+        } else if (override != nullptr && override->contains("bounds")) {
+            addLocalBounds((*override)["bounds"], blocksMovement);
         } else if (prop.contains("collision")) {
             addLocalBounds(prop["collision"], blocksMovement);
         }

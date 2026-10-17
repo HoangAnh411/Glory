@@ -1450,6 +1450,55 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+            std::array<std::vector<glm::vec3>, 3> collisionRouteTrails;
+            const auto runCollisionRoute = [&](std::size_t routeIndex, const glm::vec3& start, float cameraYaw,
+                glory::input::Control moveControl, float seconds, const glm::vec3& bossStart) {
+                auto& routeTrail = collisionRouteTrails[routeIndex];
+                routeTrail.clear();
+                routeTrail.push_back(start);
+                controller.teleport(start, cameraYaw);
+                playerHealth = activeClass ? activeClass->baseHp : 150.0F;
+                boss.reset();
+                boss.setCollisionWorld(collisionWorld);
+                boss.setSpawnTransform(bossStart, 0.0F);
+                boss.setHealth(0.0F);
+                combat.resetEncounter();
+                combat.dummy().hurtbox = {boss.position(), boss.hurtbox().radius, boss.hurtbox().height};
+                combat.dummy().currentHp = boss.currentHp();
+                bossEncounterActive = false;
+                bossActivationDelayRemaining = 2.0F;
+
+                double routeAccumulator = 0.0;
+                double routeElapsed = 0.0;
+                const int routeFrames = static_cast<int>(std::ceil(seconds * renderFps));
+                for (int frameIndex = 0; frameIndex < routeFrames; ++frameIndex) {
+                    const double frameDelta = 1.0 / static_cast<double>(renderFps);
+                    routeAccumulator += frameDelta;
+                    routeElapsed += frameDelta;
+                    glory::input::InputFrame routeInput;
+                    if (routeElapsed <= seconds) routeInput.held.push_back(moveControl);
+                    while (routeAccumulator + 1.0e-9 >= fixedDelta) {
+                        (void)fixedUpdate(fixedDelta, routeInput, cameraYaw, false, {}, {}, false);
+                        routeTrail.push_back(controller.state().position);
+                        routeAccumulator -= fixedDelta;
+                    }
+                }
+                return controller.state().position;
+            };
+            const glm::vec3 northGateResult = runCollisionRoute(0, {0.0F, 0.0F, 16.0F}, 90.0F,
+                glory::input::Control::KeyW, 3.5F, {0.0F, 0.0F, -30.0F});
+            const glm::vec3 southGateResult = runCollisionRoute(1, {0.0F, 0.0F, -16.0F}, -90.0F,
+                glory::input::Control::KeyW, 3.5F, {0.0F, 0.0F, 30.0F});
+            const glm::vec3 cliffWallResult = runCollisionRoute(2, {-32.0F, 0.0F, 0.0F}, 0.0F,
+                glory::input::Control::KeyW, 3.5F, {32.0F, 0.0F, 0.0F});
+            if (northGateResult.z < 28.8F || southGateResult.z > -28.8F ||
+                cliffWallResult.x >= -29.0F || cliffWallResult.x < -31.5F) {
+                failed = true;
+                firstFailure = "collision routes failed: northGateZ=" + std::to_string(northGateResult.z) +
+                    " southGateZ=" + std::to_string(southGateResult.z) +
+                    " cliffWallX=" + std::to_string(cliffWallResult.x);
+            }
+
             constexpr int imageSize = 1024;
             constexpr float worldScale = 13.0F;
             std::vector<unsigned char> image(imageSize * imageSize * 3, 22);
@@ -1497,6 +1546,12 @@ int main(int argc, char* argv[]) {
                 line({b.x, b.y}, {a.x, b.y}, color);
                 line({a.x, b.y}, {a.x, a.y}, color);
             }
+            constexpr std::array<std::array<std::uint8_t, 3>, 3> routeColors{{
+                {40, 220, 255}, {255, 220, 40}, {255, 150, 40}}};
+            for (std::size_t routeIndex = 0; routeIndex < collisionRouteTrails.size(); ++routeIndex)
+                for (std::size_t index = 1; index < collisionRouteTrails[routeIndex].size(); ++index)
+                    line(worldPixel(collisionRouteTrails[routeIndex][index - 1]),
+                        worldPixel(collisionRouteTrails[routeIndex][index]), routeColors[routeIndex]);
             for (std::size_t i = 1; i < playerTrail.size(); ++i)
                 line(worldPixel(playerTrail[i - 1]), worldPixel(playerTrail[i]), {40, 190, 255});
             for (std::size_t i = 1; i < bossTrail.size(); ++i)
@@ -1508,7 +1563,9 @@ int main(int argc, char* argv[]) {
             nlohmann::json trace{{"render_fps", renderFps}, {"fixed_steps", fixedStep},
                 {"arena_center", {collisionWorld.arenaCenter().x, collisionWorld.arenaCenter().y}},
                 {"arena_radius", collisionWorld.arenaRadius()}, {"player_positions", nlohmann::json::array()},
-                {"boss_positions", nlohmann::json::array()}};
+                {"boss_positions", nlohmann::json::array()},
+                {"collision_routes", {{"north_gate_z", northGateResult.z},
+                    {"south_gate_z", southGateResult.z}, {"cliff_wall_x", cliffWallResult.x}}}};
             for (const auto& position : playerTrail)
                 trace["player_positions"].push_back({position.x, position.y, position.z});
             for (const auto& position : bossTrail)

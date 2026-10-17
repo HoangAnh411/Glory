@@ -119,8 +119,9 @@ void testWorldColliderData() {
         });
     };
     expect(hasType("bush_flower_cluster#", false), "bush bounds are loaded for debug but do not block movement");
-    expect(hasType("terrain_hill_green#", false) && hasType("terrain_cliff_rock#", false),
-        "large decorative terrain bounds do not block movement");
+    expect(hasType("terrain_hill_green#", false), "large decorative hills do not block movement");
+    expect(hasType("terrain_cliff_rock#71", false), "distant backdrop cliffs remain non-blocking");
+    expect(hasType("terrain_cliff_rock#60", true), "near-arena cliff walls have physical collision");
     expect(hasType("bench_wooden#", true) && hasType("fence_farm_wood#", true),
         "solid benches and fences remain movement blockers");
     const auto tree = std::find_if(world.obstacles().begin(), world.obstacles().end(), [](const Aabb& box) {
@@ -129,6 +130,56 @@ void testWorldColliderData() {
     expect(tree != world.obstacles().end() && tree->blocksMovement &&
         tree->maximum.x - tree->minimum.x <= 1.5F && tree->maximum.z - tree->minimum.z <= 1.5F,
         "tree collision uses a narrow trunk footprint instead of canopy bounds");
+
+    for (const int gateIndex : {35, 51}) {
+        const std::string gateName = "village_gate_tower#" + std::to_string(gateIndex);
+        const auto gateParts = std::count_if(world.obstacles().begin(), world.obstacles().end(),
+            [&](const Aabb& box) { return box.name == gateName && box.blocksMovement; });
+        expect(gateParts == 4, "each gate uses four support colliders, not a solid bounding box");
+
+        const float gateZ = gateIndex == 35 ? 24.0F : -24.0F;
+        const CollisionResult edgeSupport = world.resolve(capsuleAt({1.5F, 0.0F, gateZ}),
+            {7.0F, 0.0F, gateZ}, {5.5F, 0.0F, 0.0F});
+        expect(edgeSupport.position.x <= 2.9F && edgeSupport.contactCount > 0,
+            "each gate support blocks traversal beside the opening");
+    }
+}
+
+void testAuthoredGateOpeningsAndCliffWall() {
+    using namespace glory::game;
+    const CollisionWorld world = CollisionWorld::loadFromFiles(
+        std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_map.json",
+        std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_colliders.json");
+
+    const CollisionResult northGate = world.resolve(capsuleAt({0.0F, 0.0F, 18.0F}),
+        {0.0F, 0.0F, 30.0F}, {0.0F, 0.0F, 12.0F});
+    expect(nearlyEqual(northGate.position.z, 30.0F) && northGate.contactCount == 0,
+        "player capsule passes through the north gate opening");
+    const CollisionResult southGate = world.resolve(capsuleAt({0.0F, 0.0F, -18.0F}),
+        {0.0F, 0.0F, -30.0F}, {0.0F, 0.0F, -12.0F});
+    expect(nearlyEqual(southGate.position.z, -30.0F) && southGate.contactCount == 0,
+        "player capsule passes through the south gate opening");
+    const CollisionResult bossAtNorthGate = world.resolve(Capsule{{0.0F, 0.0F, 18.0F}, 0.55F, 2.2F},
+        {0.0F, 0.0F, 30.0F}, {0.0F, 0.0F, 12.0F});
+    expect(nearlyEqual(bossAtNorthGate.position.z, 30.0F) && bossAtNorthGate.contactCount == 0,
+        "boss capsule also passes through the gate opening");
+    const CollisionResult gateSupport = world.resolve(capsuleAt({1.5F, 0.0F, 24.0F}),
+        {7.0F, 0.0F, 24.0F}, {2.8F, 0.0F, 0.0F});
+    expect(gateSupport.position.x <= 2.9F && gateSupport.contactCount > 0,
+        "gate side support remains solid beside the opening");
+
+    const auto cliff = std::find_if(world.obstacles().begin(), world.obstacles().end(), [](const Aabb& box) {
+        return box.name == "terrain_cliff_rock#60";
+    });
+    expect(cliff != world.obstacles().end(), "near-arena cliff instance has an authored wall collider");
+    if (cliff != world.obstacles().end()) {
+        const float z = 0.5F * (cliff->minimum.z + cliff->maximum.z);
+        const CollisionResult wall = world.resolve(capsuleAt({cliff->minimum.x - 2.0F, 0.0F, z}),
+            {cliff->maximum.x + 3.0F, 0.0F, z},
+            {cliff->maximum.x - cliff->minimum.x + 5.0F, 0.0F, 0.0F});
+        expect(wall.position.x <= cliff->minimum.x - 0.35F && wall.contactCount > 0,
+            "movement stops at the near-arena cliff wall without relying on the arena radius");
+    }
 }
 
 void testNonBlockingDecorationAndBlockingTrunk() {
@@ -220,6 +271,7 @@ int main() {
     testWalkableAndSteepSlopes();
     testStepUpAndSampleTerrain();
     testWorldColliderData();
+    testAuthoredGateOpeningsAndCliffWall();
     testNonBlockingDecorationAndBlockingTrunk();
     testCapsuleActorSeparation();
     testFrameRateIndependentWallBlocking();
