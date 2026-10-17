@@ -125,8 +125,9 @@ void CharacterController::update(const ActionMap& actions, float cameraYawDegree
         desiredPosition += knockbackDisplacement;
     }
     const Capsule capsule{state_.position, config_.capsuleRadius, config_.capsuleHeight};
-    const CollisionResult collision = collisionWorld_.resolve(
-        capsule, desiredPosition, state_.velocity, config_.maximumStepHeight);
+    const CollisionResult collision = collisionEnabled_
+        ? collisionWorld_.resolve(capsule, desiredPosition, state_.velocity, config_.maximumStepHeight)
+        : CollisionResult{desiredPosition, state_.velocity, desiredPosition.y <= 0.0F, 0};
     state_.position = collision.position;
     state_.velocity = collision.velocity;
     state_.isGrounded = collision.isGrounded;

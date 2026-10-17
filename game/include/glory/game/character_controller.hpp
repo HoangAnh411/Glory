@@ -5,6 +5,8 @@
 
 #include <glm/vec3.hpp>
 
+#include <utility>
+
 namespace glory::game {
 
 struct CharacterControllerConfig {
@@ -50,6 +52,8 @@ public:
     void reset() noexcept;
     [[nodiscard]] const CharacterControllerState& state() const noexcept { return state_; }
     void addObstacle(const Aabb& obstacle) { collisionWorld_.addObstacle(obstacle); }
+    void setCollisionEnabled(bool enabled) noexcept { collisionEnabled_ = enabled; }
+    void setCollisionWorld(CollisionWorld world) { collisionWorld_ = std::move(world); }
     [[nodiscard]] CollisionWorld& collisionWorld() noexcept { return collisionWorld_; }
     [[nodiscard]] const CollisionWorld& collisionWorld() const noexcept { return collisionWorld_; }
 
@@ -57,6 +61,7 @@ private:
     CharacterControllerConfig config_;
     CharacterControllerState state_;
     CollisionWorld collisionWorld_ = CollisionWorld::makeSampleWorld();
+    bool collisionEnabled_ = true;
 };
 
 } // namespace glory::game

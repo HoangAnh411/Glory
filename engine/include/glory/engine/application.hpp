@@ -2,6 +2,7 @@
 
 #include "glory/input/input_frame.hpp"
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include <cstdint>
@@ -351,6 +352,11 @@ struct ApplicationConfig {
     bool captureMode = false;
     bool captureHdrEnabled = true;
     bool highPixelDensity = false;
+    bool captureCollisionDebug = false;
+    struct CollisionDebugBox { glm::vec3 minimum{0.0F}; glm::vec3 maximum{0.0F}; };
+    std::vector<CollisionDebugBox> collisionDebugBoxes;
+    glm::vec2 arenaCenter{0.0F};
+    float arenaRadius = 0.0F;
     std::string captureSuffix;
     std::filesystem::path modelPath;
     std::filesystem::path bossModelPath;
@@ -382,7 +388,7 @@ struct ApplicationConfig {
 };
 
 using FixedUpdateCallback = std::function<PlayerFrameState(double, const input::InputFrame&, float, bool,
-    const std::string&, const std::string&)>;
+    const std::string&, const std::string&, bool)>;
 
 int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& fixedUpdate);
 

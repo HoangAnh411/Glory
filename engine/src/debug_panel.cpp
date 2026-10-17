@@ -466,10 +466,18 @@ void DebugPanel::renderGameHud(const PlayerFrameState& player, std::string& requ
     }
 }
 
+void DebugPanel::setCollisionDebugData(const std::vector<ApplicationConfig::CollisionDebugBox>& boxes,
+    glm::vec2 arenaCenter, float arenaRadius, glm::vec3 playerPosition) {
+    collisionDebugBoxes_ = boxes;
+    collisionArenaCenter_ = arenaCenter;
+    collisionArenaRadius_ = arenaRadius;
+    collisionPlayerPosition_ = playerPosition;
+}
+
 void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
     const glm::vec3& cameraPosition, float cameraYaw, float cameraPitch,
     const CameraDebugMetrics& cameraMetrics, bool& thirdPersonMode,
-    bool& enhancedCamera, ThirdPersonCamera& orbitCamera, RenderPipeline& renderPipeline,
+    bool& enhancedCamera, bool& noclipEnabled, ThirdPersonCamera& orbitCamera, RenderPipeline& renderPipeline,
     const PlayerFrameState& player, bool& resetBossRequested,
     std::string& requestedSkillId,
     std::string& statusCommand, std::vector<SkillEditorSkill>& editorSkills,
@@ -719,6 +727,10 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     }
 
                     ImGui::SeparatorText("Player Telemetry");
+                    ImGui::Checkbox("World collider wireframe", &collisionWireframeEnabled_);
+                    ImGui::Checkbox("Noclip (debug)", &noclipEnabled);
+                    ImGui::Text("World AABBs: %d | Arena radius: %.1f m",
+                        static_cast<int>(collisionDebugBoxes_.size()), collisionArenaRadius_);
                     ImGui::Text("Position: %.2f, %.2f, %.2f | Velocity: %.2f, %.2f, %.2f",
                         player.position.x, player.position.y, player.position.z,
                         player.velocity.x, player.velocity.y, player.velocity.z);
@@ -1204,6 +1216,55 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
 }
 
 void DebugPanel::render() {
+    if (collisionWireframeEnabled_ && !collisionDebugBoxes_.empty()) {
+        ImDrawList* draw = ImGui::GetForegroundDrawList();
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        const auto project = [&](const glm::vec3& world, ImVec2& screen) {
+            const glm::vec4 clip = viewProjection_ * glm::vec4(world, 1.0F);
+            if (clip.w <= 1.0e-5F || !std::isfinite(clip.w)) return false;
+            const glm::vec2 ndc = glm::vec2(clip) / clip.w;
+            if (!std::isfinite(ndc.x) || !std::isfinite(ndc.y)) return false;
+            screen = ImVec2((ndc.x * 0.5F + 0.5F) * display.x,
+                (0.5F - ndc.y * 0.5F) * display.y);
+            return true;
+        };
+        static constexpr int edgeCorners[12][2] = {
+            {0,1},{0,2},{0,4},{1,3},{1,5},{2,3},{2,6},{3,7},{4,5},{4,6},{5,7},{6,7}};
+        for (const auto& box : collisionDebugBoxes_) {
+            glm::vec3 corners[8];
+            ImVec2 screen[8];
+            bool visible[8]{};
+            bool touching = false;
+            const float closestX = std::clamp(collisionPlayerPosition_.x, box.minimum.x, box.maximum.x);
+            const float closestZ = std::clamp(collisionPlayerPosition_.z, box.minimum.z, box.maximum.z);
+            const float dx = collisionPlayerPosition_.x - closestX;
+            const float dz = collisionPlayerPosition_.z - closestZ;
+            touching = dx * dx + dz * dz <= 0.42F * 0.42F &&
+                collisionPlayerPosition_.y < box.maximum.y && collisionPlayerPosition_.y + 1.8F > box.minimum.y;
+            for (int index = 0; index < 8; ++index) {
+                corners[index] = {(index & 1) ? box.maximum.x : box.minimum.x,
+                    (index & 2) ? box.maximum.y : box.minimum.y,
+                    (index & 4) ? box.maximum.z : box.minimum.z};
+                visible[index] = project(corners[index], screen[index]);
+            }
+            const ImU32 color = touching ? IM_COL32(255, 64, 48, 255) : IM_COL32(64, 255, 128, 220);
+            for (const auto& edge : edgeCorners)
+                if (visible[edge[0]] && visible[edge[1]])
+                    draw->AddLine(screen[edge[0]], screen[edge[1]], color, 1.5F);
+        }
+        if (collisionArenaRadius_ > 0.0F) {
+            for (int segment = 0; segment < 96; ++segment) {
+                const float a0 = static_cast<float>(segment) * 6.28318530718F / 96.0F;
+                const float a1 = static_cast<float>(segment + 1) * 6.28318530718F / 96.0F;
+                ImVec2 p0, p1;
+                const glm::vec3 w0{collisionArenaCenter_.x + std::cos(a0) * collisionArenaRadius_, 0.05F,
+                    collisionArenaCenter_.y + std::sin(a0) * collisionArenaRadius_};
+                const glm::vec3 w1{collisionArenaCenter_.x + std::cos(a1) * collisionArenaRadius_, 0.05F,
+                    collisionArenaCenter_.y + std::sin(a1) * collisionArenaRadius_};
+                if (project(w0, p0) && project(w1, p1)) draw->AddLine(p0, p1, IM_COL32(255, 220, 64, 230), 2.0F);
+            }
+        }
+    }
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }

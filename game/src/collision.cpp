@@ -2,9 +2,12 @@
 
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <limits>
 #include <stdexcept>
 
 namespace glory::game {
@@ -112,6 +115,69 @@ void CollisionWorld::addRamp(const Ramp& ramp) {
         throw std::invalid_argument("Collision ramp bounds must be finite and ordered");
     }
     ramps_.push_back(ramp);
+}
+
+void CollisionWorld::setArenaBoundary(glm::vec2 center, float radius) {
+    if (!std::isfinite(center.x) || !std::isfinite(center.y) || !std::isfinite(radius) || radius <= 0.0F)
+        throw std::invalid_argument("Arena boundary must have finite center and positive radius");
+    arenaCenter_ = center;
+    arenaRadius_ = radius;
+}
+
+CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldMapPath,
+    const std::filesystem::path& colliderDataPath) {
+    using Json = nlohmann::json;
+    std::ifstream colliderFile(colliderDataPath);
+    if (!colliderFile) throw std::runtime_error("Unable to open world collider data: " + colliderDataPath.string());
+    Json colliderData;
+    colliderFile >> colliderData;
+    CollisionWorld world;
+    const auto& arena = colliderData.at("arena");
+    world.setArenaBoundary({arena.at("center").at(0).get<float>(), arena.at("center").at(1).get<float>()},
+        arena.at("radius").get<float>());
+
+    std::ifstream worldFile(worldMapPath);
+    if (!worldFile) throw std::runtime_error("Unable to open world map: " + worldMapPath.string());
+    Json worldMap;
+    worldFile >> worldMap;
+    const float pi = std::acos(-1.0F);
+    for (const auto& prop : worldMap.value("props", Json::array())) {
+        const auto position = prop.value("position", Json::array());
+        if (!position.is_array() || position.size() < 3) continue;
+        const glm::vec3 origin{position[0].get<float>(), position[1].get<float>(), position[2].get<float>()};
+        const float yaw = prop.value("yaw", 0.0F) * pi / 180.0F;
+        const float scale = std::abs(prop.value("scale", 1.0F));
+        const auto addLocalBounds = [&](const Json& bounds) {
+            if (!bounds.is_array() || bounds.size() < 6) return;
+            const glm::vec3 localMin{bounds[0].get<float>(), bounds[1].get<float>(), bounds[2].get<float>()};
+            const glm::vec3 localMax{bounds[3].get<float>(), bounds[4].get<float>(), bounds[5].get<float>()};
+            float minX = std::numeric_limits<float>::max();
+            float minZ = std::numeric_limits<float>::max();
+            float maxX = std::numeric_limits<float>::lowest();
+            float maxZ = std::numeric_limits<float>::lowest();
+            for (int corner = 0; corner < 4; ++corner) {
+                const float x = ((corner & 1) ? localMax.x : localMin.x) * scale;
+                const float z = ((corner & 2) ? localMax.z : localMin.z) * scale;
+                const float worldX = origin.x + x * std::cos(yaw) + z * std::sin(yaw);
+                const float worldZ = origin.z - x * std::sin(yaw) + z * std::cos(yaw);
+                minX = std::min(minX, worldX); maxX = std::max(maxX, worldX);
+                minZ = std::min(minZ, worldZ); maxZ = std::max(maxZ, worldZ);
+            }
+            world.addObstacle({{minX, origin.y + localMin.y * scale, minZ},
+                {maxX, origin.y + localMax.y * scale, maxZ}, false});
+        };
+        if (prop.contains("collision")) addLocalBounds(prop["collision"]);
+        if (prop.contains("multi_collision") && prop["multi_collision"].is_array())
+            for (const auto& bounds : prop["multi_collision"]) addLocalBounds(bounds);
+    }
+    for (const auto& item : colliderData.value("obstacles", Json::array())) {
+        const auto& minimum = item.at("minimum");
+        const auto& maximum = item.at("maximum");
+        world.addObstacle({{minimum[0].get<float>(), minimum[1].get<float>(), minimum[2].get<float>()},
+            {maximum[0].get<float>(), maximum[1].get<float>(), maximum[2].get<float>()},
+            item.value("step", false)});
+    }
+    return world;
 }
 
 CollisionResult CollisionWorld::resolve(const Capsule& capsule, const glm::vec3& desiredPosition,

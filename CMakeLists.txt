@@ -289,6 +289,7 @@ if(BUILD_TESTING)
 
     add_executable(glory_collision_tests tests/collision_tests.cpp)
     target_link_libraries(glory_collision_tests PRIVATE glory_game)
+    target_compile_definitions(glory_collision_tests PRIVATE GLORY_ASSET_DIR="${CMAKE_SOURCE_DIR}/assets")
     target_compile_features(glory_collision_tests PRIVATE cxx_std_20)
     add_test(NAME glory_collision COMMAND glory_collision_tests)
 

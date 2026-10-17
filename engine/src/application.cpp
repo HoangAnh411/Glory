@@ -193,6 +193,8 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     int result = 0;
     try {
         DebugPanel debugPanel(window, context);
+        bool noclipEnabled = false;
+        debugPanel.setCollisionWireframeEnabled(config.captureCollisionDebug);
         RenderPipeline renderPipeline;
         if (config.captureMode && !config.captureHdrEnabled) renderPipeline.setHdrEnabled(false);
         std::unique_ptr<GlApi> captureGl;
@@ -305,7 +307,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 }
                 const float cameraYaw = thirdPersonMode ? thirdPersonCamera.yawDegrees() : camera.yawDegrees();
                 player = fixedUpdate(fixedDeltaSeconds, gameplayInput, cameraYaw, resetBossRequested,
-                    requestedSkillId, statusCommand);
+                    requestedSkillId, statusCommand, noclipEnabled);
                 player.targetLocked = targetLockActive;
                 player.targetLockPosition = player.bossPosition;
                 animationFrozenThisFrame = animationFrozenThisFrame || player.hitStopActive;
@@ -496,8 +498,11 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             renderer.setTransform(player.position, player.facingYaw);
             renderer.setDeadAppearance(player.playerDead);
             if (!animationFrozenThisFrame) renderer.updateAnimation(static_cast<float>(frameSeconds));
+            debugPanel.setViewProjection(projection * view);
+            debugPanel.setCollisionDebugData(config.collisionDebugBoxes, config.arenaCenter,
+                config.arenaRadius, player.position);
             debugPanel.beginFrame(static_cast<float>(frameSeconds), completedTicks, cameraPosition,
-                cameraYaw, cameraPitch, cameraMetrics, thirdPersonMode, enhancedCamera, thirdPersonCamera,
+                cameraYaw, cameraPitch, cameraMetrics, thirdPersonMode, enhancedCamera, noclipEnabled, thirdPersonCamera,
                 renderPipeline,
                 player, resetBossRequested,
                 requestedSkillId,

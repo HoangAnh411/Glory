@@ -1,7 +1,9 @@
 #pragma once
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include <filesystem>
 #include <vector>
 
 namespace glory::game {
@@ -45,6 +47,11 @@ public:
 
     [[nodiscard]] const std::vector<Aabb>& obstacles() const noexcept { return obstacles_; }
     [[nodiscard]] const std::vector<Ramp>& ramps() const noexcept { return ramps_; }
+    [[nodiscard]] float arenaRadius() const noexcept { return arenaRadius_; }
+    [[nodiscard]] const glm::vec2& arenaCenter() const noexcept { return arenaCenter_; }
+    void setArenaBoundary(glm::vec2 center, float radius);
+    [[nodiscard]] static CollisionWorld loadFromFiles(const std::filesystem::path& worldMapPath,
+        const std::filesystem::path& colliderDataPath);
     [[nodiscard]] CollisionResult resolve(const Capsule& capsule, const glm::vec3& desiredPosition,
         const glm::vec3& velocity, float maximumStepHeight = 0.25F) const noexcept;
 
@@ -53,6 +60,8 @@ public:
 private:
     std::vector<Aabb> obstacles_;
     std::vector<Ramp> ramps_;
+    glm::vec2 arenaCenter_{0.0F};
+    float arenaRadius_ = 0.0F;
 };
 
 } // namespace glory::game

@@ -266,6 +266,12 @@ int main(int argc, char* argv[]) {
             config.captureMode = true;
             config.highPixelDensity = true;
             config.captureSuffix = "_high_dpi";
+        } else if (std::strcmp(argv[index], "--capture-colliders") == 0) {
+            config.windowWidth = 1920;
+            config.windowHeight = 1080;
+            config.captureMode = true;
+            config.captureCollisionDebug = true;
+            config.captureSuffix = "_colliders";
         } else if (std::strcmp(argv[index], "--connect") == 0 && index + 1 < argc) {
             const std::string endpoint(argv[++index]);
             const std::size_t separator = endpoint.rfind(':');
@@ -284,7 +290,7 @@ int main(int argc, char* argv[]) {
             connectHost = endpoint.substr(0, separator);
             connectPort = static_cast<std::uint16_t>(parsedPort);
         } else {
-            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture|--capture-no-hdr|--capture-720p|--capture-high-dpi] [--connect IPv4:port]\n";
+            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture|--capture-no-hdr|--capture-720p|--capture-high-dpi|--capture-colliders] [--connect IPv4:port]\n";
             return 2;
         }
     }
@@ -519,6 +525,14 @@ int main(int argc, char* argv[]) {
     glory::game::Simulation simulation;
     glory::game::ActionMap actionMap;
     glory::game::CharacterController controller;
+    const auto collisionWorld = glory::game::CollisionWorld::loadFromFiles(
+        std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_map.json",
+        std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_colliders.json");
+    controller.setCollisionWorld(collisionWorld);
+    config.arenaCenter = collisionWorld.arenaCenter();
+    config.arenaRadius = collisionWorld.arenaRadius();
+    for (const auto& box : collisionWorld.obstacles())
+        config.collisionDebugBoxes.push_back({box.minimum, box.maximum});
     glory::game::WorldEncounter worldEncounter = glory::game::WorldEncounter::loadFromFile(config.worldSpawnsPath);
     toWorldEditorData(worldEncounter, config.worldSpawns, config.worldTriggers);
     if (const auto* playerSpawn = worldEncounter.findSpawn(glory::game::SpawnEntityType::Player))
@@ -662,7 +676,9 @@ int main(int argc, char* argv[]) {
         float cameraYawDegrees,
         bool resetBoss,
         const std::string& requestedSkillId,
-        const std::string& statusCommand) {
+        const std::string& statusCommand,
+        bool noclipEnabled) {
+        controller.setCollisionEnabled(!noclipEnabled);
         using namespace glory::network;
         if (networkClient) {
             for (const auto& event : networkClient->poll()) {

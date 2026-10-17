@@ -2,7 +2,9 @@
 
 #include <glm/geometric.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <iostream>
 
 namespace {
@@ -73,12 +75,26 @@ void testStepUpAndSampleTerrain() {
     expect(sample.obstacles().size() == 2 && sample.ramps().size() == 2,
         "sample terrain includes a wall, two slopes, and a low step");
 }
+
+void testWorldColliderData() {
+    using namespace glory::game;
+    const CollisionWorld world = CollisionWorld::loadFromFiles(
+        std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_map.json",
+        std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_colliders.json");
+    expect(nearlyEqual(world.arenaRadius(), 34.0F), "arena collider data loads the authored boundary radius");
+    expect(world.obstacles().size() >= 60, "world map local bounds load into the game collision world");
+    const bool containsWell = std::any_of(world.obstacles().begin(), world.obstacles().end(), [](const Aabb& box) {
+        return box.minimum.x < 4.0F && box.maximum.x > 6.0F && box.minimum.z < 5.0F && box.maximum.z > 7.0F;
+    });
+    expect(containsWell, "world prop collider is transformed from local bounds into world space");
+}
 } // namespace
 
 int main() {
     testWallDepenetrationAndSliding();
     testWalkableAndSteepSlopes();
     testStepUpAndSampleTerrain();
+    testWorldColliderData();
     if (failures != 0) {
         std::cerr << failures << " collision test(s) failed\n";
         return 1;

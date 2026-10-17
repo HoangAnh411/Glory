@@ -73,10 +73,13 @@ public:
     [[nodiscard]] bool isDevToolsVisible() const noexcept { return devToolsVisible_; }
     void setDevToolsVisible(bool visible) noexcept { devToolsVisible_ = visible; }
     void setCameraMarkerVisible(bool visible) noexcept { cameraMarkerVisible_ = visible; }
+    void setCollisionDebugData(const std::vector<ApplicationConfig::CollisionDebugBox>& boxes,
+        glm::vec2 arenaCenter, float arenaRadius, glm::vec3 playerPosition);
+    void setCollisionWireframeEnabled(bool enabled) noexcept { collisionWireframeEnabled_ = enabled; }
     [[nodiscard]] bool isFeedbackOpen() const noexcept { return feedbackOpenRequested_; }
     void beginFrame(float frameSeconds, std::uint64_t fixedTicks, const glm::vec3& cameraPosition,
         float cameraYaw, float cameraPitch, const CameraDebugMetrics& cameraMetrics,
-        bool& thirdPersonMode, bool& enhancedCamera,
+        bool& thirdPersonMode, bool& enhancedCamera, bool& noclipEnabled,
         ThirdPersonCamera& orbitCamera,
         RenderPipeline& renderPipeline, const PlayerFrameState& player,
         bool& resetBossRequested, std::string& requestedSkillId,
@@ -132,6 +135,11 @@ private:
     float averageFps_ = 0.0F;
     bool feedbackOpenRequested_ = false;
     bool arenaBoundaryDebugEnabled_ = false;
+    bool collisionWireframeEnabled_ = false;
+    std::vector<ApplicationConfig::CollisionDebugBox> collisionDebugBoxes_;
+    glm::vec2 collisionArenaCenter_{0.0F};
+    glm::vec3 collisionPlayerPosition_{0.0F};
+    float collisionArenaRadius_ = 0.0F;
 };
 
 } // namespace glory::engine

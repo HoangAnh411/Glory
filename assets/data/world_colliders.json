@@ -1,0 +1,8 @@
+{
+  "arena": {
+    "center": [0.0, 0.0],
+    "radius": 34.0,
+    "outerWallHeight": 4.0
+  },
+  "obstacles": []
+}
