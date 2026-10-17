@@ -21,6 +21,7 @@ CharacterController::CharacterController(const CharacterControllerConfig& config
         !std::isfinite(config_.jumpVelocity) || config_.jumpVelocity < 0.0F ||
         !std::isfinite(config_.gravity) || config_.gravity < 0.0F ||
         !std::isfinite(config_.rotationSpeedDegrees) || config_.rotationSpeedDegrees < 0.0F ||
+        !std::isfinite(config_.movementAccelerationTime) || config_.movementAccelerationTime <= 0.0F ||
         !std::isfinite(config_.dodgeDuration) || config_.dodgeDuration <= 0.0F ||
         !std::isfinite(config_.dodgeSpeed) || config_.dodgeSpeed < 0.0F ||
         !std::isfinite(config_.dodgeCooldown) || config_.dodgeCooldown < 0.0F ||
@@ -58,27 +59,34 @@ void CharacterController::update(const ActionMap& actions, float cameraYawDegree
     if (stunned) moveDirection = glm::vec3(0.0F);
     const float moveLength = glm::length(moveDirection);
     const bool hasMoveInput = moveLength > 1.0e-6F;
+    const float effectiveSpeed = config_.moveSpeed * (std::isfinite(speedMultiplier)
+        ? std::clamp(speedMultiplier, 0.0F, 4.0F) : 1.0F);
+    glm::vec2 desiredHorizontalVelocity{0.0F};
     if (moveLength > 1.0e-6F) {
         moveDirection /= moveLength;
-        const float effectiveSpeed = config_.moveSpeed * (std::isfinite(speedMultiplier)
-            ? std::clamp(speedMultiplier, 0.0F, 4.0F) : 1.0F);
-        state_.velocity.x = moveDirection.x * effectiveSpeed;
-        state_.velocity.z = moveDirection.z * effectiveSpeed;
+        desiredHorizontalVelocity = {moveDirection.x * effectiveSpeed, moveDirection.z * effectiveSpeed};
         const float desiredYaw = std::atan2(moveDirection.z, moveDirection.x) / degreesToRadians;
         const float yawDifference = wrapDegrees(desiredYaw - state_.facingYaw);
         const float maxTurn = config_.rotationSpeedDegrees * delta;
         state_.facingYaw = wrapDegrees(state_.facingYaw + std::clamp(yawDifference, -maxTurn, maxTurn));
-    } else {
-        state_.velocity.x = 0.0F;
-        state_.velocity.z = 0.0F;
     }
+    const glm::vec2 currentHorizontalVelocity{state_.velocity.x, state_.velocity.z};
+    const glm::vec2 velocityDelta = desiredHorizontalVelocity - currentHorizontalVelocity;
+    const float acceleration = std::max(config_.moveSpeed, effectiveSpeed) / config_.movementAccelerationTime;
+    const float maximumVelocityChange = acceleration * delta;
+    const float velocityDeltaLength = glm::length(velocityDelta);
+    const glm::vec2 nextHorizontalVelocity = velocityDeltaLength > maximumVelocityChange
+        ? currentHorizontalVelocity + velocityDelta / velocityDeltaLength * maximumVelocityChange
+        : desiredHorizontalVelocity;
+    state_.velocity.x = nextHorizontalVelocity.x;
+    state_.velocity.z = nextHorizontalVelocity.y;
 
     if (allowDodge && !stunned && actions.state(Action::Dodge).pressed &&
         state_.dodgeCooldownRemaining <= 0.0F && !state_.isDodging) {
         if (hasMoveInput) state_.dodgeDirection = moveDirection;
         else {
             const float facingRadians = state_.facingYaw * degreesToRadians;
-            state_.dodgeDirection = {std::cos(facingRadians), 0.0F, std::sin(facingRadians)};
+            state_.dodgeDirection = {-std::cos(facingRadians), 0.0F, -std::sin(facingRadians)};
         }
         state_.isDodging = true;
         state_.dodgeElapsed = 0.0F;

@@ -57,6 +57,53 @@ void testCameraRelativeMovement() {
         "diagonal movement is normalized to run speed");
 }
 
+void testSmoothMovementAndTurnRate() {
+    using namespace glory::game;
+    using glory::input::Control;
+    ActionMap actions;
+    CharacterController controller;
+    CollisionWorld openWorld;
+    controller.setCollisionWorld(openWorld);
+    applyInput(actions, {Control::KeyW});
+    controller.update(actions, 0.0F, 1.0 / 60.0);
+    const float firstSpeed = glm::length(glm::vec2(controller.state().velocity.x, controller.state().velocity.z));
+    expect(firstSpeed > 0.0F && firstSpeed < 5.5F * 0.95F,
+        "movement accelerates instead of applying full speed on the first tick");
+    for (int tick = 0; tick < 10; ++tick) controller.update(actions, 0.0F, 1.0 / 60.0);
+    expect(glm::length(glm::vec2(controller.state().velocity.x, controller.state().velocity.z)) > 5.4F,
+        "movement reaches the configured run speed smoothly");
+    applyInput(actions, {});
+    controller.update(actions, 0.0F, 1.0 / 60.0);
+    const float releaseSpeed = glm::length(glm::vec2(controller.state().velocity.x, controller.state().velocity.z));
+    expect(releaseSpeed > 0.0F && releaseSpeed < 5.5F,
+        "movement decelerates instead of stopping instantaneously");
+
+    controller.teleport({}, -90.0F);
+    applyInput(actions, {Control::KeyW});
+    controller.update(actions, 90.0F, 1.0 / 60.0);
+    expect(std::abs(std::remainder(controller.state().facingYaw - (-78.0F), 360.0F)) < 0.01F,
+        "facing rotation is capped at 720 degrees per second");
+    const float yawWhileMoving = controller.state().facingYaw;
+    applyInput(actions, {});
+    controller.update(actions, 90.0F, 1.0 / 60.0);
+    expect(nearlyEqual(controller.state().facingYaw, yawWhileMoving), "idle input does not rotate the character");
+}
+
+void testDiagonalWallSlideUsesSolver() {
+    using namespace glory::game;
+    using glory::input::Control;
+    ActionMap actions;
+    CharacterController controller;
+    CollisionWorld world;
+    world.addObstacle({{1.0F, -1.0F, -20.0F}, {1.5F, 3.0F, 20.0F}, false, "test_wall", true});
+    controller.setCollisionWorld(world);
+    controller.teleport({}, 0.0F);
+    applyInput(actions, {Control::KeyW, Control::KeyA});
+    for (int tick = 0; tick < 90; ++tick) controller.update(actions, 0.0F, 1.0 / 60.0);
+    expect(controller.state().position.x <= 0.61F && controller.state().position.z < -1.0F,
+        "diagonal movement stops at the wall and slides along it through the solver");
+}
+
 void testJumpGravityAndGrounding() {
     using namespace glory::game;
     ActionMap actions;
@@ -109,7 +156,7 @@ void testDodgeSpeedIFramesAndCooldown() {
     expect(controller.state().isInvulnerable, "i-frame activates at the configured window start");
     expect(nearlyEqual(glm::length(glm::vec2(controller.state().velocity.x, controller.state().velocity.z)), 12.0F),
         "dodge uses the configured dash speed");
-    expect(controller.state().position.z < -0.5F, "stationary dodge uses the facing direction");
+    expect(controller.state().position.z > 0.5F, "stationary dodge moves backward from the facing direction");
 
     frame.pressed.clear();
     actions.update(frame);
@@ -137,6 +184,8 @@ void testDodgeSpeedIFramesAndCooldown() {
 
 int main() {
     testCameraRelativeMovement();
+    testSmoothMovementAndTurnRate();
+    testDiagonalWallSlideUsesSolver();
     testJumpGravityAndGrounding();
     testFacingRotationAndAttackEdge();
     testDodgeSpeedIFramesAndCooldown();

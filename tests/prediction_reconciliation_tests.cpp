@@ -27,12 +27,13 @@ int main() {
         const auto movement = forwardInput();
 
         const std::uint32_t firstSequence = prediction.predict(movement, 0.0F, fixedDelta);
-        require(firstSequence == 1 && predictedController.state().position.x > 0.05F,
+        const float firstPredictedPosition = predictedController.state().position.x;
+        require(firstSequence == 1 && firstPredictedPosition > 0.0F,
             "client movement prediction waited for a server snapshot");
         prediction.predict(movement, 0.0F, fixedDelta);
 
         AuthoritativeCharacterState matchingAck;
-        matchingAck.controller.position = {5.5F * static_cast<float>(fixedDelta), 0.0F, 0.0F};
+        matchingAck.controller.position = {firstPredictedPosition, 0.0F, 0.0F};
         matchingAck.controller.facingYaw = 0.0F;
         require(prediction.reconcile(firstSequence, matchingAck), "valid server acknowledgement was rejected");
         require(prediction.unacknowledgedInputCount() == 1 &&
@@ -48,7 +49,7 @@ int main() {
         reconciliation.predict(movement, 0.0F, fixedDelta);
         reconciliation.predict(movement, 0.0F, fixedDelta);
         AuthoritativeCharacterState correctedServerState;
-        correctedServerState.controller.position = {0.0F, 0.0F, 0.0F};
+        correctedServerState.controller.position = {-0.1F, 0.0F, 0.0F};
         correctedServerState.controller.facingYaw = 0.0F;
         correctedServerState.controller.externalKnockbackVelocity = {3.0F, 0.0F, 0.0F};
         correctedServerState.controller.knockbackRemaining = 0.25F;

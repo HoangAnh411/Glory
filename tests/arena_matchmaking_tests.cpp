@@ -175,7 +175,7 @@ void testProtocolAndHundredMillisecondLoopback() {
     glory::input::InputFrame forward;
     forward.held.push_back(glory::input::Control::KeyW);
     prediction.predict(forward, 0.0F, 1.0 / 60.0);
-    require(controller.state().position.x > 0.05F,
+    require(controller.state().position.x > 0.0F,
         "local prediction did not move immediately while awaiting the delayed server response");
 
     glory::game::SkillDefinition attack;

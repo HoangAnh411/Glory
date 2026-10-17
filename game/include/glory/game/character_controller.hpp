@@ -13,7 +13,8 @@ struct CharacterControllerConfig {
     float moveSpeed = 5.5F;
     float jumpVelocity = 7.0F;
     float gravity = 18.0F;
-    float rotationSpeedDegrees = 540.0F;
+    float rotationSpeedDegrees = 720.0F;
+    float movementAccelerationTime = 0.1F;
     float dodgeDuration = 0.35F;
     float dodgeSpeed = 12.0F;
     float dodgeCooldown = 0.8F;
