@@ -119,6 +119,7 @@ public:
     [[nodiscard]] float hitStopRemaining() const noexcept { return hitStopRemaining_; }
     [[nodiscard]] bool attackAnimationRequested() const noexcept { return attackAnimationRequested_; }
     [[nodiscard]] bool attackCanceled() const noexcept { return attackCanceled_; }
+    [[nodiscard]] float maximumAttackRange() const noexcept;
 
 private:
     [[nodiscard]] bool startSkill(const std::string& skillId, bool comboTransition);

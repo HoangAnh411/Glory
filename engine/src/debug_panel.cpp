@@ -183,7 +183,7 @@ void DebugPanel::renderGameHud(const PlayerFrameState& player, std::string& requ
     }
 
     // 1. Crosshair & Combat Reticle (Center Screen)
-    if (bgDraw) {
+    if (bgDraw && player.attackAimMode == 0) {
         const ImVec2 center(vpPos.x + vpSize.x * 0.5F, vpPos.y + vpSize.y * 0.5F);
         bgDraw->AddCircleFilled(center, 2.0F, IM_COL32(255, 255, 255, 200));
         constexpr float tickInner = 5.0F;
@@ -195,6 +195,12 @@ void DebugPanel::renderGameHud(const PlayerFrameState& player, std::string& requ
 
         if (player.hitStopActive) {
             bgDraw->AddText(ImVec2(center.x - 14.0F, center.y + 16.0F), IM_COL32(255, 215, 0, 240), "HIT!");
+        }
+    } else if (bgDraw && player.attackAimTargetValid) {
+        ImVec2 aimScreen;
+        if (worldToScreen(player.attackAimTargetPosition + glm::vec3(0.0F, 1.4F, 0.0F), aimScreen)) {
+            bgDraw->AddCircle(aimScreen, 7.0F, IM_COL32(255, 90, 90, 230), 16, 1.5F);
+            bgDraw->AddCircleFilled(aimScreen, 2.0F, IM_COL32(255, 210, 90, 230));
         }
     }
 
@@ -478,7 +484,7 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
     const glm::vec3& cameraPosition, float cameraYaw, float cameraPitch,
     const CameraDebugMetrics& cameraMetrics, bool& thirdPersonMode,
     bool& enhancedCamera, bool& noclipEnabled, ThirdPersonCamera& orbitCamera, RenderPipeline& renderPipeline,
-    const PlayerFrameState& player, bool& resetBossRequested,
+    const PlayerFrameState& player, int& attackAimMode, bool& resetBossRequested,
     std::string& requestedSkillId,
     std::string& statusCommand, std::vector<SkillEditorSkill>& editorSkills,
     const SaveSkillsCallback& saveSkills, const ReloadSkillsCallback& reloadSkills,
@@ -662,6 +668,12 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     if (ImGui::Checkbox("Auto-return behind character", &autoReturn)) {
                         orbitCamera.setAutoReturnEnabled(autoReturn);
                         cameraSettingsChanged = true;
+                    }
+                    static constexpr const char* aimModes[] = {"Manual", "Assist", "Auto"};
+                    attackAimMode = std::clamp(attackAimMode, 0, 2);
+                    if (ImGui::Combo("Attack direction", &attackAimMode, aimModes, IM_ARRAYSIZE(aimModes))) {
+                        statusCommand = attackAimMode == 0 ? "aim_mode_manual" :
+                            (attackAimMode == 1 ? "aim_mode_assist" : "aim_mode_auto");
                     }
                     float orbitDistance = orbitCamera.distance();
                     if (ImGui::SliderFloat("Orbit distance", &orbitDistance, 3.0F, 8.0F, "%.1f m")) {

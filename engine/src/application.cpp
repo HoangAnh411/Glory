@@ -141,6 +141,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     InputSystem inputSystem;
     FreeCamera camera;
     ThirdPersonCameraConfig orbitCameraConfig;
+    int attackAimMode = 1;
     const std::filesystem::path cameraSettingsPath = "settings/camera.json";
     try {
         if (std::filesystem::exists(cameraSettingsPath)) {
@@ -152,6 +153,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             orbitCameraConfig.mouseSensitivity = settings.value("mouse_sensitivity", orbitCameraConfig.mouseSensitivity);
             orbitCameraConfig.invertMouseY = settings.value("invert_mouse_y", orbitCameraConfig.invertMouseY);
             orbitCameraConfig.autoReturnEnabled = settings.value("auto_return", orbitCameraConfig.autoReturnEnabled);
+            attackAimMode = std::clamp(settings.value("attack_aim_mode", attackAimMode), 0, 2);
         }
     } catch (const std::exception& error) {
         std::cerr << "Ignoring invalid camera settings: " << error.what() << '\n';
@@ -173,6 +175,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     bool relativeMouseActive = false;
     bool ignoreNextMouseFrame = true;
     bool targetLockActive = false;
+    glm::vec3 targetLockPosition{0.0F};
     bool attackActive = false;
     bool resetBossRequested = false;
     std::string requestedSkillId;
@@ -201,6 +204,14 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     const std::array<int, 6> cameraTestPhaseFps{30, 60, 144, 60, 60, 60};
     const std::array<const char*, 6> cameraTestCaptureNames{
         "yaw_30fps", "yaw_60fps", "yaw_144fps", "pitch_limits", "zoom_range", "wall_arm"};
+    double combatTestElapsed = 0.0;
+    double combatTestPhaseElapsed = 0.0;
+    int combatTestPhase = -1;
+    bool combatTestCaptureWritten = false;
+    bool combatTestPressSent = false;
+    std::array<bool, 6> combatTestPasses{};
+    const std::array<const char*, 6> combatTestCaptureNames{
+        "manual_attack", "assist_attack", "auto_attack", "lock_frame", "lock_cancel", "lock_hold"};
     int lastLoggedWindowWidth = -1;
     int lastLoggedWindowHeight = -1;
     int lastLoggedDrawableWidth = -1;
@@ -344,6 +355,35 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     thirdPersonCamera.constrainArm(8.0F, 1.0F);
                 }
             }
+            if (config.combatTestMode) {
+                const std::array<double, 6> phaseDurations{0.7, 0.7, 0.7, 1.0, 0.7, 1.0};
+                double phaseStart = 0.0;
+                int nextPhase = 0;
+                while (nextPhase < static_cast<int>(phaseDurations.size()) - 1 &&
+                    combatTestElapsed >= phaseStart + phaseDurations[nextPhase]) {
+                    phaseStart += phaseDurations[nextPhase];
+                    ++nextPhase;
+                }
+                if (combatTestPhase >= 0 && !combatTestCaptureWritten && nextPhase != combatTestPhase) {
+                    nextPhase = combatTestPhase;
+                    combatTestPhaseElapsed = phaseDurations[combatTestPhase];
+                }
+                if (nextPhase != combatTestPhase) {
+                    combatTestPhase = nextPhase;
+                    combatTestPhaseElapsed = 0.0;
+                    combatTestCaptureWritten = false;
+                    combatTestPressSent = false;
+                    const std::array<float, 6> yaws{90.0F, 0.0F, 180.0F, 0.0F, 0.0F, 0.0F};
+                    thirdPersonCamera.setOrbitPose(yaws[combatTestPhase], 15.0F);
+                    thirdPersonCamera.setZoom(5.0F);
+                    resetBossRequested = combatTestPhase < 4;
+                    statusCommand = std::string("combat_setup_") +
+                        (combatTestPhase == 0 ? "manual" : combatTestPhase == 1 ? "assist" :
+                         combatTestPhase == 2 ? "auto" : combatTestPhase == 3 ? "lock" :
+                         combatTestPhase == 4 ? "far" : "hold");
+                    std::cout << "[combat-test] phase " << combatTestPhase << '\n';
+                }
+            }
 
             const std::uint64_t currentCounter = SDL_GetPerformanceCounter();
             const double frameSeconds = static_cast<double>(currentCounter - previousCounter) /
@@ -351,10 +391,10 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             previousCounter = currentCounter;
             const double simulationFrameSeconds = config.cameraTestMode
                 ? 1.0 / static_cast<double>(cameraTestPhaseFps[std::max(0, cameraTestPhase)])
-                : frameSeconds;
+                : (config.combatTestMode ? 1.0 / 60.0 : frameSeconds);
             animationFrozenThisFrame = player.hitStopActive;
 
-            if (!config.captureMode || config.cameraTestMode) timestep.advance(simulationFrameSeconds, [&](double fixedDeltaSeconds) {
+            if (!config.captureMode || config.cameraTestMode || config.combatTestMode) timestep.advance(simulationFrameSeconds, [&](double fixedDeltaSeconds) {
                 if (config.smokeTestTickLimit != 0 &&
                     completedTicks >= config.smokeTestTickLimit) {
                     return;
@@ -362,6 +402,25 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 const input::InputFrame inputFrame = inputSystem.consumeFrame();
                 animationFrozenThisFrame = animationFrozenThisFrame || player.hitStopActive;
                 input::InputFrame gameplayInput = inputFrame;
+                if (config.combatTestMode) {
+                    gameplayInput.held.clear();
+                    gameplayInput.pressed.clear();
+                    gameplayInput.released.clear();
+                    gameplayInput.mouseDeltaX = 0.0F;
+                    gameplayInput.mouseDeltaY = 0.0F;
+                    gameplayInput.mouseWheelY = 0.0F;
+                    combatTestPhaseElapsed += fixedDeltaSeconds;
+                    if (!combatTestPressSent) {
+                        if (combatTestPhase <= 2) {
+                            gameplayInput.pressed.push_back(input::Control::MouseLeft);
+                            gameplayInput.held.push_back(input::Control::MouseLeft);
+                        } else if (combatTestPhase == 3) {
+                            gameplayInput.pressed.push_back(input::Control::KeyTab);
+                            gameplayInput.held.push_back(input::Control::KeyTab);
+                        }
+                        combatTestPressSent = true;
+                    }
+                }
                 if (ignoreNextMouseFrame) {
                     gameplayInput.mouseDeltaX = 0.0F;
                     gameplayInput.mouseDeltaY = 0.0F;
@@ -405,10 +464,6 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     gameplayInput.pressed.end()) {
                     thirdPersonMode = !thirdPersonMode;
                 }
-                if (std::find(gameplayInput.pressed.begin(), gameplayInput.pressed.end(), input::Control::KeyTab) !=
-                    gameplayInput.pressed.end()) {
-                    targetLockActive = !targetLockActive;
-                }
                 if (player.bossDefeated) targetLockActive = false;
                 thirdPersonCamera.setLocked(targetLockActive, player.bossPosition);
                 legacyThirdPersonCamera.setLocked(targetLockActive, player.bossPosition);
@@ -430,8 +485,8 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     requestedSkillId, statusCommand, noclipEnabled);
                 if (config.cameraTestMode && cameraTestPhase == 5)
                     player.position = {-6.0F, 0.0F, 7.0F};
-                player.targetLocked = targetLockActive;
-                player.targetLockPosition = player.bossPosition;
+                targetLockActive = player.targetLocked;
+                targetLockPosition = player.targetLockPosition;
                 animationFrozenThisFrame = animationFrozenThisFrame || player.hitStopActive;
                 resetBossRequested = false;
                 requestedSkillId.clear();
@@ -475,6 +530,10 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             if (config.cameraTestMode) {
                 cameraTestPhaseElapsed += simulationFrameSeconds;
                 cameraTestElapsed += simulationFrameSeconds;
+            }
+            if (config.combatTestMode) {
+                combatTestElapsed += simulationFrameSeconds;
+                combatTestPhaseElapsed += simulationFrameSeconds;
             }
 
             // Keep the scripted FPS simulation while limiting expensive GPU frames.
@@ -661,7 +720,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             debugPanel.beginFrame(static_cast<float>(frameSeconds), completedTicks, cameraPosition,
                 cameraYaw, cameraPitch, cameraMetrics, thirdPersonMode, enhancedCamera, noclipEnabled, thirdPersonCamera,
                 renderPipeline,
-                player, resetBossRequested,
+                player, attackAimMode, resetBossRequested,
                 requestedSkillId,
                 statusCommand,
                 editorSkills, config.saveSkills, config.reloadSkills,
@@ -678,15 +737,20 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             glm::vec3 captureRootJoint{};
             bool captureMarkerInFrame = false;
             if (config.captureMode) {
-                captureRootJoint = config.cameraTestMode
-                    ? player.position + glm::vec3(0.0F, 1.4F, 0.0F) : renderer.rootJointWorldPosition();
+                 captureRootJoint = config.cameraTestMode || config.combatTestMode
+                     ? player.position + glm::vec3(0.0F, 1.4F, 0.0F) : renderer.rootJointWorldPosition();
                 const glm::vec3 markerWorld = captureRootJoint;
                 const glm::vec4 markerClip = projection * view * glm::vec4(markerWorld, 1.0F);
-                if (!std::isfinite(markerClip.w) || markerClip.w <= 1.0e-6F)
-                    throw std::runtime_error("Capture root-joint marker is behind the camera");
-                const glm::vec2 markerNdc = glm::vec2(markerClip) / markerClip.w;
-                captureMarkerInFrame = std::abs(markerNdc.x) <= 1.0F && std::abs(markerNdc.y) <= 1.0F;
-                renderPipeline.setCaptureMarkerNdc(markerNdc);
+                if (!std::isfinite(markerClip.w) || markerClip.w <= 1.0e-6F) {
+                    if (!config.combatTestMode)
+                        throw std::runtime_error("Capture root-joint marker is behind the camera");
+                    captureMarkerInFrame = false;
+                }
+                if (captureMarkerInFrame) {
+                    const glm::vec2 markerNdc = glm::vec2(markerClip) / markerClip.w;
+                    captureMarkerInFrame = std::abs(markerNdc.x) <= 1.0F && std::abs(markerNdc.y) <= 1.0F;
+                    renderPipeline.setCaptureMarkerNdc(markerNdc);
+                }
             }
             std::unordered_set<std::uint32_t> visibleRemoteIds;
             std::vector<RenderActor> renderActors;
@@ -719,7 +783,11 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             debugPanel.render();
             const bool cameraTestCaptureDue = config.cameraTestMode && !cameraTestCaptureWritten && cameraTestPhase >= 0 &&
                 cameraTestPhaseElapsed + 1.0e-9 >= cameraTestPhaseDurations[cameraTestPhase];
-            if (config.captureMode && (!config.cameraTestMode || cameraTestCaptureDue)) {
+            const std::array<double, 6> combatTestPhaseDurations{0.7, 0.7, 0.7, 1.0, 0.7, 1.0};
+            const bool combatTestCaptureDue = config.combatTestMode && !combatTestCaptureWritten && combatTestPhase >= 0 &&
+                combatTestPhaseElapsed + 1.0e-9 >= combatTestPhaseDurations[combatTestPhase];
+            if (config.captureMode && (!config.cameraTestMode || cameraTestCaptureDue) &&
+                (!config.combatTestMode || combatTestCaptureDue)) {
                 const int width = drawableWidth;
                 const int height = drawableHeight;
                 std::vector<unsigned char> pixels(static_cast<std::size_t>(width) * height * 4U);
@@ -777,9 +845,13 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                         std::swap(pixels[top + column], pixels[bottom + column]);
                 }
                 const std::filesystem::path directory = config.cameraTestMode
-                    ? std::filesystem::path("captures") / "camera-test" : std::filesystem::path("captures");
+                    ? std::filesystem::path("captures") / "camera-test" :
+                    (config.combatTestMode ? std::filesystem::path("captures") / "combat-test" :
+                        std::filesystem::path("captures"));
                 std::filesystem::create_directories(directory);
-                const std::string name = config.cameraTestMode ? cameraTestCaptureNames[captureIndex] : captureNames[captureIndex];
+                const std::string name = config.cameraTestMode ? cameraTestCaptureNames[captureIndex] :
+                    (config.combatTestMode ? combatTestCaptureNames[static_cast<std::size_t>(combatTestPhase)] :
+                        captureNames[captureIndex]);
                 const std::string captureSuffix = config.captureSuffix +
                     (config.captureHdrEnabled ? "" : "_no_hdr");
                 const std::filesystem::path imagePath = directory / (name + captureSuffix + ".png");
@@ -827,6 +899,24 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                         cameraMetrics.playerNdcMaximum.y < 1.0F &&
                         (cameraTestPhase != 3 || (cameraTestMinimumPitch <= -9.99F &&
                             cameraTestMaximumPitch >= 69.99F)));
+                const bool lockFramePass = cameraMetrics.bossNdcMinimum.x >= -1.0F &&
+                    cameraMetrics.bossNdcMaximum.x <= 1.0F && cameraMetrics.bossNdcMinimum.y >= -1.0F &&
+                    cameraMetrics.bossNdcMaximum.y <= 1.0F && cameraOutsideCollider && markerReadbackPass;
+                if (config.combatTestMode) {
+                    const float expectedYaw[] = {90.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
+                    const float facingError = std::abs(std::remainder(player.facingYaw - expectedYaw[combatTestPhase], 360.0F));
+                    const bool attackPass = combatTestPhase > 2 || facingError <= 1.0F;
+                    const bool lockPass = combatTestPhase == 3 ? (player.targetLocked && lockFramePass) :
+                        (combatTestPhase == 4 ? !player.targetLocked : true);
+                    combatTestPasses[static_cast<std::size_t>(combatTestPhase)] = attackPass && lockPass &&
+                        cameraOutsideCollider && markerReadbackPass;
+                    std::cout << "[combat-test] " << name << " "
+                              << (combatTestPasses[static_cast<std::size_t>(combatTestPhase)] ? "PASS" : "FAIL")
+                              << " facing=" << player.facingYaw << " targetLocked=" << player.targetLocked
+                              << " playerNdc=" << cameraMetrics.playerNdc.x << ',' << cameraMetrics.playerNdc.y
+                              << " bossNdc=" << cameraMetrics.bossNdcMinimum.x << ',' << cameraMetrics.bossNdcMinimum.y
+                              << ".." << cameraMetrics.bossNdcMaximum.x << ',' << cameraMetrics.bossNdcMaximum.y << '\n';
+                }
                 bool fpsRotationPass = true;
                 if (config.cameraTestMode && cameraTestPhase <= 2) {
                     cameraTestYawResults[cameraTestPhase] = cameraYaw;
@@ -873,9 +963,19 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                           << " m, blocker " << cameraMetrics.blockingCollider << '\n';
                 ++captureIndex;
                 if (config.cameraTestMode) cameraTestCaptureWritten = true;
-                if (captureIndex >= (config.cameraTestMode ? cameraTestCaptureNames.size() : captureNames.size())) running = false;
+                if (config.combatTestMode) {
+                    combatTestCaptureWritten = true;
+                    if (combatTestPhase == static_cast<int>(combatTestCaptureNames.size()) - 1) running = false;
+                }
+                if (captureIndex >= (config.cameraTestMode ? cameraTestCaptureNames.size() : captureNames.size()) &&
+                    !config.combatTestMode) running = false;
             }
             SDL_GL_SwapWindow(window);
+        }
+        if (config.combatTestMode) {
+            const bool pass = std::all_of(combatTestPasses.begin(), combatTestPasses.end(), [](bool value) { return value; });
+            std::cout << "--combat-test " << (pass ? "PASS" : "FAIL") << '\n';
+            if (!pass) result = 1;
         }
         if (config.smokeTestTickLimit != 0) {
             std::cout << "OpenGL renderer: " << renderPipeline.rendererInfo() << '\n';

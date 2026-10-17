@@ -301,6 +301,9 @@ struct PlayerFrameState {
     std::vector<CombatHitVisualEvent> hitEvents;
     bool targetLocked = false;
     glm::vec3 targetLockPosition{0.0F};
+    int attackAimMode = 1;
+    bool attackAimTargetValid = false;
+    glm::vec3 attackAimTargetPosition{0.0F};
     std::vector<std::string> activeTriggerStates;
     glm::vec3 practiceDummyPosition{0.0F};
     float practiceDummyYaw = 0.0F;
@@ -351,6 +354,7 @@ struct ApplicationConfig {
     std::uint64_t smokeTestTickLimit = 0;
     bool captureMode = false;
     bool cameraTestMode = false;
+    bool combatTestMode = false;
     bool captureHdrEnabled = true;
     bool highPixelDensity = false;
     bool captureCollisionDebug = false;

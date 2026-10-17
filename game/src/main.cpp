@@ -9,6 +9,7 @@
 #include "glory/game/status_effect.hpp"
 #include "glory/game/world_encounter.hpp"
 #include "glory/game/inventory.hpp"
+#include "glory/game/targeting.hpp"
 #include "glory/network/network.hpp"
 
 #include <glm/geometric.hpp>
@@ -312,6 +313,13 @@ int main(int argc, char* argv[]) {
             config.captureSuffix = "_camera-test";
             config.windowWidth = 640;
             config.windowHeight = 360;
+        } else if (std::strcmp(argv[index], "--combat-test") == 0) {
+            config.combatTestMode = true;
+            config.captureMode = true;
+            config.captureCollisionDebug = true;
+            config.captureSuffix = "_combat-test";
+            config.windowWidth = 640;
+            config.windowHeight = 360;
         } else if (std::strcmp(argv[index], "--connect") == 0 && index + 1 < argc) {
             const std::string endpoint(argv[++index]);
             const std::size_t separator = endpoint.rfind(':');
@@ -330,7 +338,7 @@ int main(int argc, char* argv[]) {
             connectHost = endpoint.substr(0, separator);
             connectPort = static_cast<std::uint16_t>(parsedPort);
         } else {
-            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture|--capture-no-hdr|--capture-720p|--capture-high-dpi|--capture-colliders|--walk-test|--move-test|--camera-test] [--connect IPv4:port]\n";
+            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture|--capture-no-hdr|--capture-720p|--capture-high-dpi|--capture-colliders|--walk-test|--move-test|--camera-test|--combat-test] [--connect IPv4:port]\n";
             return 2;
         }
     }
@@ -614,6 +622,9 @@ int main(int argc, char* argv[]) {
     }
     glory::game::Boss boss(bossConfig);
     boss.setCollisionWorld(collisionWorld);
+    glory::game::AttackAimMode attackAimMode = glory::game::AttackAimMode::Assist;
+    bool targetLockActive = false;
+    glm::vec3 targetLockPosition{0.0F};
     bool bossEncounterActive = false;
     float bossActivationDelayRemaining = 2.0F;
     glory::game::SkillRegistry skillRegistry = glory::game::SkillRegistry::loadFromFile(config.skillsPath);
@@ -1170,6 +1181,9 @@ int main(int argc, char* argv[]) {
             }
         }
         actionMap.update(inputFrame);
+        if (statusCommand == "aim_mode_manual") attackAimMode = glory::game::AttackAimMode::Manual;
+        else if (statusCommand == "aim_mode_assist") attackAimMode = glory::game::AttackAimMode::Assist;
+        else if (statusCommand == "aim_mode_auto") attackAimMode = glory::game::AttackAimMode::Auto;
         using glory::game::StatusEffect;
         using glory::game::StatusEffectKind;
         if (statusCommand == "player_speed")
@@ -1198,12 +1212,44 @@ int main(int argc, char* argv[]) {
             combat.dummy().hurtbox = {boss.position(), 0.55F, 2.2F};
             playerEffects.clear();
             playerHealth = activeClass ? activeClass->baseHp : 100.0F;
+            targetLockActive = false;
+        }
+        if (config.combatTestMode && statusCommand.starts_with("combat_setup_")) {
+            controller.teleport({0.0F, 0.0F, 0.0F}, 0.0F);
+            const bool farTarget = statusCommand == "combat_setup_far";
+            boss.setSpawnTransform(farTarget ? glm::vec3{35.0F, 0.0F, 0.0F} : glm::vec3{3.0F, 0.0F, 0.0F}, 0.0F);
+            combat.dummy().hurtbox.base = boss.position();
+            combat.dummy().currentHp = boss.currentHp();
+            std::cout << "[combat-test] setup " << statusCommand << " boss=" << boss.position().x << ',' << boss.position().z
+                      << " los=" << glory::game::hasLineOfSight(collisionWorld, controller.state().position, boss.position()) << '\n';
+            if (statusCommand == "combat_setup_manual") attackAimMode = glory::game::AttackAimMode::Manual;
+            else if (statusCommand == "combat_setup_assist") attackAimMode = glory::game::AttackAimMode::Assist;
+            else if (statusCommand == "combat_setup_auto") attackAimMode = glory::game::AttackAimMode::Auto;
+        }
+        if (actionMap.state(glory::game::Action::TargetLock).pressed) {
+            if (targetLockActive) {
+                targetLockActive = false;
+            } else {
+                const auto selected = glory::game::chooseLockTarget(collisionWorld, controller.state().position,
+                    cameraYawDegrees, boss.position(), !boss.isDead(), 25.0F, 30.0F);
+                targetLockActive = selected.valid;
+                if (targetLockActive) targetLockPosition = selected.position;
+            }
+        }
+        if (targetLockActive) {
+            const glm::vec3 delta = boss.position() - controller.state().position;
+            if (boss.isDead() || glm::length(glm::vec2(delta.x, delta.z)) > 30.0F ||
+                !glory::game::hasLineOfSight(collisionWorld, controller.state().position, boss.position())) {
+                targetLockActive = false;
+            } else {
+                targetLockPosition = boss.position();
+            }
         }
         const float activeMaxHp = activeClass ? activeClass->baseHp : 100.0F;
         playerEffects.update(static_cast<float>(fixedDeltaSeconds), playerHealth, activeMaxHp);
         if (playerHealth > 0.0F && !combat.isHitStopped())
             controller.update(actionMap, cameraYawDegrees, fixedDeltaSeconds, combat.dodgeAllowed(),
-                playerEffects.calculateSpeedMultiplier(), playerEffects.isStunned());
+                playerEffects.calculateSpeedMultiplier(), playerEffects.isStunned(), targetLockActive, targetLockPosition);
         simulation.fixedUpdate(fixedDeltaSeconds);
         const auto& state = controller.state();
         const bool respawnPressed = std::find(inputFrame.pressed.begin(), inputFrame.pressed.end(),
@@ -1279,6 +1325,13 @@ int main(int argc, char* argv[]) {
         const std::string requestedAnimation = wantsAttackAnimation ? "Attack" : (moving ? "Run" : "Idle");
         const bool attackPressed = actionMap.state(glory::game::Action::PrimaryAttack).pressed ||
             state.attackRequested || !effectiveSkillId.empty();
+        const auto attackTarget = targetLockActive
+            ? glory::game::chooseAttackTarget(collisionWorld, state.position, cameraYawDegrees,
+                targetLockPosition, !boss.isDead(), glory::game::AttackAimMode::Auto, combat.maximumAttackRange())
+            : glory::game::chooseAttackTarget(collisionWorld, state.position, cameraYawDegrees,
+                boss.position(), !boss.isDead(), attackAimMode, combat.maximumAttackRange());
+        if (attackPressed)
+            controller.orientForAttack(attackTarget.valid ? attackTarget.yawDegrees : cameraYawDegrees);
         combat.update(static_cast<float>(fixedDeltaSeconds), state.position, state.facingYaw,
             attackPressed, requestedAnimation,
             actionMap.state(glory::game::Action::Dodge).pressed, state.isDodging,
@@ -1340,6 +1393,11 @@ int main(int argc, char* argv[]) {
         frame.bossDefeated = boss.isDead();
         frame.bossPosition = boss.position();
         frame.bossYaw = boss.yawDegrees();
+        frame.targetLocked = targetLockActive;
+        frame.targetLockPosition = targetLockPosition;
+        frame.attackAimMode = static_cast<int>(attackAimMode);
+        frame.attackAimTargetValid = attackTarget.valid;
+        frame.attackAimTargetPosition = attackTarget.position;
         frame.practiceDummyPosition = practiceDummyPosition;
         frame.practiceDummyYaw = practiceDummyYaw;
         for (const std::string& activeId : worldEncounter.activeTriggerIds()) {
@@ -1718,7 +1776,8 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            std::array<std::vector<glm::vec3>, 3> collisionRouteTrails;
+            std::array<std::vector<glm::vec3>, 4> collisionRouteTrails;
+            std::array<std::string, 4> collisionRouteContacts;
             const auto runCollisionRoute = [&](std::size_t routeIndex, const glm::vec3& start, float cameraYaw,
                 glory::input::Control moveControl, float seconds, const glm::vec3& bossStart) {
                 auto& routeTrail = collisionRouteTrails[routeIndex];
@@ -1746,25 +1805,50 @@ int main(int argc, char* argv[]) {
                     glory::input::InputFrame routeInput;
                     if (routeElapsed <= seconds) routeInput.held.push_back(moveControl);
                     while (routeAccumulator + 1.0e-9 >= fixedDelta) {
-                        (void)fixedUpdate(fixedDelta, routeInput, cameraYaw, false, {}, {}, false);
-                        routeTrail.push_back(controller.state().position);
+                        const auto frame = fixedUpdate(fixedDelta, routeInput, cameraYaw, false, {}, {}, false);
+                        const glm::vec3 position = controller.state().position;
+                        routeTrail.push_back(position);
+                        if (frame.collisionCount > 0 && collisionRouteContacts[routeIndex].empty()) {
+                            std::string blocker = "unknown";
+                            for (const auto& box : collisionWorld.obstacles()) {
+                                if (!box.blocksMovement || position.y >= box.maximum.y ||
+                                    position.y + 1.8F <= box.minimum.y) continue;
+                                const float closestX = std::clamp(position.x, box.minimum.x, box.maximum.x);
+                                const float closestZ = std::clamp(position.z, box.minimum.z, box.maximum.z);
+                                if (glm::length(glm::vec2{position.x - closestX, position.z - closestZ}) <= 0.45F) {
+                                    blocker = box.name;
+                                    break;
+                                }
+                            }
+                            collisionRouteContacts[routeIndex] = blocker + " at (" + std::to_string(position.x) +
+                                "," + std::to_string(position.z) + ")";
+                        }
                         routeAccumulator -= fixedDelta;
                     }
                 }
                 return controller.state().position;
             };
-            const glm::vec3 northGateResult = runCollisionRoute(0, {0.0F, 0.0F, 16.0F}, 90.0F,
-                glory::input::Control::KeyW, 5.0F, {0.0F, 0.0F, -30.0F});
-            const glm::vec3 southGateResult = runCollisionRoute(1, {0.0F, 0.0F, -16.0F}, -90.0F,
-                glory::input::Control::KeyW, 5.0F, {0.0F, 0.0F, 30.0F});
-            const glm::vec3 cliffWallResult = runCollisionRoute(2, {-10.0F, 0.0F, 0.0F}, 180.0F,
+            const glm::vec3 northGateResult = runCollisionRoute(0, {0.0F, 0.0F, 0.0F}, 90.0F,
+                glory::input::Control::KeyW, 10.0F, {0.0F, 0.0F, -30.0F});
+            const glm::vec3 southGateResult = runCollisionRoute(1, {0.0F, 0.0F, 0.0F}, -90.0F,
+                glory::input::Control::KeyW, 10.0F, {0.0F, 0.0F, 30.0F});
+            const glm::vec3 westSpawnWallResult = runCollisionRoute(2, {0.0F, 0.0F, 0.0F}, 180.0F,
                 glory::input::Control::KeyW, 5.0F, {32.0F, 0.0F, 0.0F});
+            const glm::vec3 eastSpawnWallResult = runCollisionRoute(3, {0.0F, 0.0F, 0.0F}, 0.0F,
+                glory::input::Control::KeyW, 5.0F, {-32.0F, 0.0F, 0.0F});
+            const bool westHitHill = collisionRouteContacts[2].find("terrain_hill_green#") != std::string::npos;
+            const bool eastHitHill = collisionRouteContacts[3].find("terrain_hill_green#") != std::string::npos;
             if (northGateResult.z < 36.0F || southGateResult.z > -36.0F ||
-                cliffWallResult.x > -13.0F || cliffWallResult.x < -18.0F) {
+                westSpawnWallResult.x > -7.8F || westSpawnWallResult.x < -9.5F ||
+                eastSpawnWallResult.x < 7.8F || eastSpawnWallResult.x > 9.5F || !westHitHill || !eastHitHill) {
                 failed = true;
-                firstFailure = "collision routes failed: northGateZ=" + std::to_string(northGateResult.z) +
-                    " southGateZ=" + std::to_string(southGateResult.z) +
-                    " cliffWallX=" + std::to_string(cliffWallResult.x);
+                firstFailure = "collision routes failed: northGate=(" + std::to_string(northGateResult.x) + "," +
+                    std::to_string(northGateResult.z) + ") southGate=(" + std::to_string(southGateResult.x) + "," +
+                    std::to_string(southGateResult.z) + ")" +
+                    " westSpawnWallX=" + std::to_string(westSpawnWallResult.x) +
+                    " eastSpawnWallX=" + std::to_string(eastSpawnWallResult.x) +
+                    " contacts=[" + collisionRouteContacts[0] + ";" + collisionRouteContacts[1] + ";" +
+                    collisionRouteContacts[2] + ";" + collisionRouteContacts[3] + "]";
             }
 
             constexpr int imageSize = 1024;
@@ -1814,8 +1898,8 @@ int main(int argc, char* argv[]) {
                 line({b.x, b.y}, {a.x, b.y}, color);
                 line({a.x, b.y}, {a.x, a.y}, color);
             }
-            constexpr std::array<std::array<std::uint8_t, 3>, 3> routeColors{{
-                {40, 220, 255}, {255, 220, 40}, {255, 150, 40}}};
+            constexpr std::array<std::array<std::uint8_t, 3>, 4> routeColors{{
+                {40, 220, 255}, {255, 220, 40}, {255, 150, 40}, {230, 70, 230}}};
             for (std::size_t routeIndex = 0; routeIndex < collisionRouteTrails.size(); ++routeIndex)
                 for (std::size_t index = 1; index < collisionRouteTrails[routeIndex].size(); ++index)
                     line(worldPixel(collisionRouteTrails[routeIndex][index - 1]),
@@ -1832,8 +1916,12 @@ int main(int argc, char* argv[]) {
                 {"arena_center", {collisionWorld.arenaCenter().x, collisionWorld.arenaCenter().y}},
                 {"arena_radius", collisionWorld.arenaRadius()}, {"player_positions", nlohmann::json::array()},
                 {"boss_positions", nlohmann::json::array()},
-                {"collision_routes", {{"north_gate_z", northGateResult.z},
-                    {"south_gate_z", southGateResult.z}, {"cliff_wall_x", cliffWallResult.x}}}};
+                {"collision_routes", {{"north_gate", {northGateResult.x, northGateResult.z}},
+                    {"south_gate", {southGateResult.x, southGateResult.z}},
+                    {"west_spawn_wall_x", westSpawnWallResult.x},
+                    {"east_spawn_wall_x", eastSpawnWallResult.x},
+                    {"west_blocker", collisionRouteContacts[2]},
+                    {"east_blocker", collisionRouteContacts[3]}}}};
             for (const auto& position : playerTrail)
                 trace["player_positions"].push_back({position.x, position.y, position.z});
             for (const auto& position : bossTrail)
@@ -1842,6 +1930,10 @@ int main(int argc, char* argv[]) {
             trace["failure"] = failed ? firstFailure : "";
             std::ofstream jsonFile(jsonPath);
             jsonFile << trace.dump(2) << '\n';
+            std::cout << "[walk-test routes] north gate z=" << northGateResult.z
+                      << " south gate z=" << southGateResult.z
+                      << " west wall x=" << westSpawnWallResult.x << " blocker=" << collisionRouteContacts[2]
+                      << " east wall x=" << eastSpawnWallResult.x << " blocker=" << collisionRouteContacts[3] << '\n';
             std::cout << "--walk-test " << renderFps << " FPS: " << (failed ? "FAIL " + firstFailure : "PASS")
                       << ", fixed steps=" << fixedStep << ", trace=" << pngPath.string() << '\n';
         }

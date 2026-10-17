@@ -81,7 +81,7 @@ public:
         float cameraYaw, float cameraPitch, const CameraDebugMetrics& cameraMetrics,
         bool& thirdPersonMode, bool& enhancedCamera, bool& noclipEnabled,
         ThirdPersonCamera& orbitCamera,
-        RenderPipeline& renderPipeline, const PlayerFrameState& player,
+         RenderPipeline& renderPipeline, const PlayerFrameState& player, int& attackAimMode,
         bool& resetBossRequested, std::string& requestedSkillId,
         std::string& statusCommand,
         std::vector<SkillEditorSkill>& editorSkills,

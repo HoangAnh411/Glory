@@ -43,6 +43,7 @@ public:
 private:
     static constexpr std::size_t actionCount = static_cast<std::size_t>(Action::Count);
     std::array<input::Control, actionCount> bindings_{};
+    std::array<input::Control, actionCount> alternateBindings_{};
     std::array<ActionState, actionCount> states_{};
 };
 

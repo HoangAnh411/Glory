@@ -69,7 +69,7 @@ public:
                 targetVelocity_ = (targetVelocity_ - springOmega * temporary) * decay;
             }
         }
-        if (autoReturnEnabled_ && locked_ && finite(lockTarget_)) {
+        if (locked_ && finite(lockTarget_)) {
             const glm::vec3 diff = lockTarget_ - target;
             const float horizontalDist = std::sqrt(diff.x * diff.x + diff.z * diff.z);
             if (horizontalDist > 0.1F) {

@@ -36,7 +36,8 @@ CharacterController::CharacterController(const CharacterControllerConfig& config
 }
 
 void CharacterController::update(const ActionMap& actions, float cameraYawDegrees,
-    double fixedDeltaSeconds, bool allowDodge, float speedMultiplier, bool stunned) noexcept {
+    double fixedDeltaSeconds, bool allowDodge, float speedMultiplier, bool stunned,
+    bool targetLocked, glm::vec3 targetPosition) noexcept {
     state_.attackRequested = false;
     if (!std::isfinite(fixedDeltaSeconds) || fixedDeltaSeconds <= 0.0 ||
         !std::isfinite(cameraYawDegrees)) return;
@@ -83,7 +84,13 @@ void CharacterController::update(const ActionMap& actions, float cameraYawDegree
 
     if (allowDodge && !stunned && actions.state(Action::Dodge).pressed &&
         state_.dodgeCooldownRemaining <= 0.0F && !state_.isDodging) {
-        if (hasMoveInput) state_.dodgeDirection = moveDirection;
+        if (targetLocked) {
+            const glm::vec3 deltaToTarget{targetPosition.x - state_.position.x, 0.0F,
+                targetPosition.z - state_.position.z};
+            const float targetDistance = glm::length(deltaToTarget);
+            if (targetDistance > 1.0e-5F) state_.dodgeDirection = deltaToTarget / targetDistance;
+            else if (hasMoveInput) state_.dodgeDirection = moveDirection;
+        } else if (hasMoveInput) state_.dodgeDirection = moveDirection;
         else {
             const float facingRadians = state_.facingYaw * degreesToRadians;
             state_.dodgeDirection = {-std::cos(facingRadians), 0.0F, -std::sin(facingRadians)};
@@ -141,6 +148,10 @@ void CharacterController::update(const ActionMap& actions, float cameraYawDegree
     state_.isGrounded = collision.isGrounded;
     state_.collisionCount = collision.contactCount;
 
+}
+
+void CharacterController::orientForAttack(float yawDegrees) noexcept {
+    if (std::isfinite(yawDegrees)) state_.facingYaw = wrapDegrees(yawDegrees);
 }
 
 void CharacterController::applyKnockback(const glm::vec3& velocity) noexcept {

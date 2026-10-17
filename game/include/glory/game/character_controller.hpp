@@ -45,7 +45,9 @@ class CharacterController {
 public:
     explicit CharacterController(const CharacterControllerConfig& config = {});
     void update(const ActionMap& actions, float cameraYawDegrees, double fixedDeltaSeconds,
-        bool allowDodge = true, float speedMultiplier = 1.0F, bool stunned = false) noexcept;
+        bool allowDodge = true, float speedMultiplier = 1.0F, bool stunned = false,
+        bool targetLocked = false, glm::vec3 targetPosition = glm::vec3(0.0F)) noexcept;
+    void orientForAttack(float yawDegrees) noexcept;
     void applyKnockback(const glm::vec3& velocity) noexcept;
     [[nodiscard]] bool setClassMovement(float moveSpeed, float dodgeCooldown) noexcept;
     void teleport(const glm::vec3& position, float yawDegrees) noexcept;

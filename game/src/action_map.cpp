@@ -17,6 +17,7 @@ bool contains(const std::vector<input::Control>& controls, input::Control contro
 
 ActionMap::ActionMap() noexcept {
     bindings_.fill(input::Control::Unknown);
+    alternateBindings_.fill(input::Control::Unknown);
     (void)bind(Action::MoveForward, input::Control::KeyW);
     (void)bind(Action::MoveBackward, input::Control::KeyS);
     (void)bind(Action::MoveLeft, input::Control::KeyA);
@@ -31,6 +32,7 @@ ActionMap::ActionMap() noexcept {
     (void)bind(Action::Skill3, input::Control::Key3);
     (void)bind(Action::Skill4, input::Control::Key4);
     (void)bind(Action::TargetLock, input::Control::KeyTab);
+    alternateBindings_[static_cast<std::size_t>(Action::TargetLock)] = input::Control::MouseMiddle;
 }
 
 bool ActionMap::bind(Action action, input::Control control) noexcept {
@@ -58,10 +60,11 @@ ActionState ActionMap::state(Action action) const noexcept {
 void ActionMap::update(const input::InputFrame& frame) noexcept {
     for (std::size_t index = 0; index < actionCount; ++index) {
         const input::Control control = bindings_[index];
+        const input::Control alternate = alternateBindings_[index];
         states_[index] = {
-            contains(frame.pressed, control),
-            control != input::Control::Unknown && contains(frame.held, control),
-            contains(frame.released, control),
+            contains(frame.pressed, control) || contains(frame.pressed, alternate),
+            (control != input::Control::Unknown && contains(frame.held, control)) || contains(frame.held, alternate),
+            contains(frame.released, control) || contains(frame.released, alternate),
         };
     }
 }

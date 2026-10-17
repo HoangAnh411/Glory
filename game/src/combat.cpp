@@ -473,6 +473,14 @@ void CombatSystem::requestSkill(const std::string& skillId) {
     if (registry_.find(skillId)) pendingSkillId_ = skillId;
 }
 
+float CombatSystem::maximumAttackRange() const noexcept {
+    float maximumRange = 0.0F;
+    for (const SkillDefinition& skill : registry_.skills())
+        maximumRange = std::max(maximumRange, glm::length(glm::vec2(skill.hitboxOffset.x, skill.hitboxOffset.z)) +
+            skill.hitboxRadius + dummy_.hurtbox.radius);
+    return maximumRange;
+}
+
 void CombatSystem::resetDummy() noexcept {
     dummy_.currentHp = dummy_.maxHp;
     dummy_.hitCount = 0;

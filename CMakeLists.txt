@@ -112,6 +112,7 @@ add_library(glory_game
     game/src/social.cpp
     game/src/simulation.cpp
     game/src/status_effect.cpp
+    game/src/targeting.cpp
     game/src/world_history.cpp
     game/src/world_encounter.cpp
 )
@@ -281,6 +282,11 @@ if(BUILD_TESTING)
     target_link_libraries(glory_character_controller_tests PRIVATE glory_game)
     target_compile_features(glory_character_controller_tests PRIVATE cxx_std_20)
     add_test(NAME glory_character_controller COMMAND glory_character_controller_tests)
+
+    add_executable(glory_targeting_tests tests/targeting_tests.cpp)
+    target_link_libraries(glory_targeting_tests PRIVATE glory_game)
+    target_compile_features(glory_targeting_tests PRIVATE cxx_std_20)
+    add_test(NAME glory_targeting COMMAND glory_targeting_tests)
 
     add_executable(glory_third_person_camera_tests tests/third_person_camera_tests.cpp)
     target_include_directories(glory_third_person_camera_tests PRIVATE engine/include)
