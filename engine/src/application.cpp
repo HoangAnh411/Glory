@@ -151,6 +151,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             orbitCameraConfig.shoulderOffset = settings.value("shoulder", orbitCameraConfig.shoulderOffset);
             orbitCameraConfig.mouseSensitivity = settings.value("mouse_sensitivity", orbitCameraConfig.mouseSensitivity);
             orbitCameraConfig.invertMouseY = settings.value("invert_mouse_y", orbitCameraConfig.invertMouseY);
+            orbitCameraConfig.autoReturnEnabled = settings.value("auto_return", orbitCameraConfig.autoReturnEnabled);
         }
     } catch (const std::exception& error) {
         std::cerr << "Ignoring invalid camera settings: " << error.what() << '\n';
@@ -185,6 +186,21 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     bool running = true;
         bool animationFrozenThisFrame = false;
     std::size_t captureIndex = 0;
+    double cameraTestElapsed = 0.0;
+    double cameraTestPhaseElapsed = 0.0;
+    int cameraTestPhase = -1;
+    bool cameraTestWheelSent = false;
+    bool cameraTestCaptureWritten = false;
+    std::uint64_t cameraTestRenderCounter = 0;
+    double cameraTestFixedPhaseElapsed = 0.0;
+    double cameraTestMousePixelsSent = 0.0;
+    std::array<float, 3> cameraTestYawResults{0.0F, 0.0F, 0.0F};
+    float cameraTestMinimumPitch = std::numeric_limits<float>::max();
+    float cameraTestMaximumPitch = std::numeric_limits<float>::lowest();
+    const std::array<double, 6> cameraTestPhaseDurations{4.0, 4.0, 4.0, 4.0, 0.5, 0.5};
+    const std::array<int, 6> cameraTestPhaseFps{30, 60, 144, 60, 60, 60};
+    const std::array<const char*, 6> cameraTestCaptureNames{
+        "yaw_30fps", "yaw_60fps", "yaw_144fps", "pitch_limits", "zoom_range", "wall_arm"};
     int lastLoggedWindowWidth = -1;
     int lastLoggedWindowHeight = -1;
     int lastLoggedDrawableWidth = -1;
@@ -294,13 +310,51 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 inputSystem.discardMouseDelta();
             }
 
+            if (config.cameraTestMode) {
+                double phaseStart = 0.0;
+                int nextPhase = 0;
+                while (nextPhase < static_cast<int>(cameraTestPhaseDurations.size()) - 1 &&
+                    cameraTestElapsed >= phaseStart + cameraTestPhaseDurations[nextPhase]) {
+                    phaseStart += cameraTestPhaseDurations[nextPhase];
+                    ++nextPhase;
+                }
+                if (cameraTestPhase >= 0 && !cameraTestCaptureWritten && nextPhase != cameraTestPhase) {
+                    nextPhase = cameraTestPhase;
+                    cameraTestPhaseElapsed = cameraTestPhaseDurations[cameraTestPhase];
+                }
+                if (nextPhase != cameraTestPhase) {
+                    cameraTestPhase = nextPhase;
+                    if (config.cameraTestMode)
+                        std::cout << "[camera-test] phase " << cameraTestPhase << " fps "
+                                  << cameraTestPhaseFps[cameraTestPhase] << '\n';
+                    cameraTestPhaseElapsed = 0.0;
+                    cameraTestWheelSent = false;
+                    cameraTestCaptureWritten = false;
+                    cameraTestFixedPhaseElapsed = 0.0;
+                    cameraTestMousePixelsSent = 0.0;
+                    cameraTestMinimumPitch = std::numeric_limits<float>::max();
+                    cameraTestMaximumPitch = std::numeric_limits<float>::lowest();
+                    player.position = cameraTestPhase == 5 ? glm::vec3{-6.0F, 0.0F, 7.0F} : glm::vec3{0.0F};
+                    player.isMoving = false;
+                    targetLockActive = false;
+                    thirdPersonCamera.setTarget(player.position);
+                    thirdPersonCamera.setOrbitPose(cameraTestPhase == 5 ? 0.0F : -90.0F,
+                        cameraTestPhase == 3 ? 15.0F : 15.0F);
+                    thirdPersonCamera.setZoom(cameraTestPhase == 4 ? 3.0F : 5.0F);
+                    thirdPersonCamera.constrainArm(8.0F, 1.0F);
+                }
+            }
+
             const std::uint64_t currentCounter = SDL_GetPerformanceCounter();
             const double frameSeconds = static_cast<double>(currentCounter - previousCounter) /
                 static_cast<double>(frequency);
             previousCounter = currentCounter;
+            const double simulationFrameSeconds = config.cameraTestMode
+                ? 1.0 / static_cast<double>(cameraTestPhaseFps[std::max(0, cameraTestPhase)])
+                : frameSeconds;
             animationFrozenThisFrame = player.hitStopActive;
 
-            if (!config.captureMode) timestep.advance(frameSeconds, [&](double fixedDeltaSeconds) {
+            if (!config.captureMode || config.cameraTestMode) timestep.advance(simulationFrameSeconds, [&](double fixedDeltaSeconds) {
                 if (config.smokeTestTickLimit != 0 &&
                     completedTicks >= config.smokeTestTickLimit) {
                     return;
@@ -322,6 +376,31 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     gameplayInput.mouseDeltaX = 0.0F;
                     gameplayInput.mouseDeltaY = 0.0F;
                 }
+                if (config.cameraTestMode) {
+                    gameplayInput.mouseDeltaX = 0.0F;
+                    gameplayInput.mouseDeltaY = 0.0F;
+                    gameplayInput.mouseWheelY = 0.0F;
+                    cameraTestFixedPhaseElapsed += fixedDeltaSeconds;
+                    const double phaseTime = cameraTestFixedPhaseElapsed;
+                    if (cameraTestPhase <= 2) {
+                        const double targetPixels = 360.0 / orbitCameraConfig.mouseSensitivity;
+                        const double desiredPixels = targetPixels * std::clamp(phaseTime / 4.0, 0.0, 1.0);
+                        gameplayInput.mouseDeltaX = static_cast<float>(desiredPixels - cameraTestMousePixelsSent);
+                        cameraTestMousePixelsSent = desiredPixels;
+                    } else if (cameraTestPhase == 3) {
+                        const float pitchDelta = phaseTime < 2.0 ? 55.0F : -80.0F;
+                        gameplayInput.mouseDeltaY = pitchDelta / orbitCameraConfig.mouseSensitivity *
+                            static_cast<float>(fixedDeltaSeconds);
+                    } else if (cameraTestPhase == 4 && !cameraTestWheelSent) {
+                        gameplayInput.mouseWheelY = -10.0F;
+                        cameraTestWheelSent = true;
+                    }
+                }
+                if (!relativeMouseActive || !windowFocused || (SDL_GetModState() & SDL_KMOD_ALT) != 0 ||
+                    debugPanel.isDevToolsVisible() || debugPanel.isFeedbackOpen()) {
+                    gameplayInput.mouseDeltaX = 0.0F;
+                    gameplayInput.mouseDeltaY = 0.0F;
+                }
                 if (std::find(gameplayInput.pressed.begin(), gameplayInput.pressed.end(), input::Control::KeyF1) !=
                     gameplayInput.pressed.end()) {
                     thirdPersonMode = !thirdPersonMode;
@@ -339,12 +418,18 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                         static_cast<float>(fixedDeltaSeconds));
                     legacyThirdPersonCamera.update(player.position, gameplayInput.mouseDeltaX, gameplayInput.mouseDeltaY,
                         static_cast<float>(fixedDeltaSeconds));
+                    if (config.cameraTestMode && cameraTestPhase == 3) {
+                        cameraTestMinimumPitch = std::min(cameraTestMinimumPitch, thirdPersonCamera.pitchDegrees());
+                        cameraTestMaximumPitch = std::max(cameraTestMaximumPitch, thirdPersonCamera.pitchDegrees());
+                    }
                 } else {
                     camera.update(gameplayInput, fixedDeltaSeconds);
                 }
                 const float cameraYaw = thirdPersonMode ? thirdPersonCamera.yawDegrees() : camera.yawDegrees();
                 player = fixedUpdate(fixedDeltaSeconds, gameplayInput, cameraYaw, resetBossRequested,
                     requestedSkillId, statusCommand, noclipEnabled);
+                if (config.cameraTestMode && cameraTestPhase == 5)
+                    player.position = {-6.0F, 0.0F, 7.0F};
                 player.targetLocked = targetLockActive;
                 player.targetLockPosition = player.bossPosition;
                 animationFrozenThisFrame = animationFrozenThisFrame || player.hitStopActive;
@@ -387,10 +472,22 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 ++completedTicks;
             });
 
+            if (config.cameraTestMode) {
+                cameraTestPhaseElapsed += simulationFrameSeconds;
+                cameraTestElapsed += simulationFrameSeconds;
+            }
+
+            // Keep the scripted FPS simulation while limiting expensive GPU frames.
+            if (config.cameraTestMode && cameraTestPhase >= 0 &&
+                cameraTestPhaseElapsed + 1.0e-9 < cameraTestPhaseDurations[cameraTestPhase] &&
+                (++cameraTestRenderCounter % 32U) != 0U) {
+                continue;
+            }
+
             constexpr std::array captureNames{"center_boss", "pillar", "wall", "toward_sun", "away_from_sun",
                 "boss_near", "arena_edge_0", "arena_edge_1", "arena_edge_2", "arena_edge_3",
                 "arena_edge_4", "arena_edge_5", "arena_edge_6", "arena_edge_7"};
-            if (config.captureMode) {
+            if (config.captureMode && !config.cameraTestMode) {
                 const std::size_t scenario = captureIndex;
                 switch (scenario) {
                 case 0: player.position = {0.0F, 0.0F, 0.0F}; player.bossPosition = {-3.8F, 0.0F, 0.0F}; break;
@@ -460,6 +557,16 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     static_cast<float>(drawableWidth) / static_cast<float>(drawableHeight));
             }
             if (thirdPersonMode && enhancedCamera) {
+                if (config.cameraTestMode && cameraTestPhase <= 2 && !cameraTestCaptureWritten &&
+                    cameraTestPhaseElapsed >= cameraTestPhaseDurations[cameraTestPhase]) {
+                    const double targetPixels = 360.0 / orbitCameraConfig.mouseSensitivity;
+                    const double residualPixels = targetPixels - cameraTestMousePixelsSent;
+                    if (residualPixels > 0.0) {
+                        thirdPersonCamera.update(player.position, static_cast<float>(residualPixels), 0.0F,
+                            1.0F / 60.0F);
+                        cameraTestMousePixelsSent = targetPixels;
+                    }
+                }
                 const float armLimit = renderer.cameraObstructionDistance(
                     thirdPersonCamera.targetPosition(), thirdPersonCamera.desiredPosition());
                 thirdPersonCamera.constrainArm(armLimit, static_cast<float>(frameSeconds));
@@ -542,6 +649,8 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 cameraMetrics.bossNdcMaximum = glm::max(cameraMetrics.bossNdcMaximum, ndc);
             }
             cameraMetrics.playerAlive = player.playerHp > 0.0F;
+            renderer.setCameraFade(cameraMetrics.actualArmLength < 2.0F
+                ? std::clamp(cameraMetrics.actualArmLength / 2.0F, 0.15F, 1.0F) : 1.0F);
 
             renderer.setTransform(player.position, player.facingYaw);
             renderer.setDeadAppearance(player.playerDead);
@@ -569,8 +678,10 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             glm::vec3 captureRootJoint{};
             bool captureMarkerInFrame = false;
             if (config.captureMode) {
-                captureRootJoint = renderer.rootJointWorldPosition();
-                const glm::vec4 markerClip = projection * view * glm::vec4(captureRootJoint, 1.0F);
+                captureRootJoint = config.cameraTestMode
+                    ? player.position + glm::vec3(0.0F, 1.4F, 0.0F) : renderer.rootJointWorldPosition();
+                const glm::vec3 markerWorld = captureRootJoint;
+                const glm::vec4 markerClip = projection * view * glm::vec4(markerWorld, 1.0F);
                 if (!std::isfinite(markerClip.w) || markerClip.w <= 1.0e-6F)
                     throw std::runtime_error("Capture root-joint marker is behind the camera");
                 const glm::vec2 markerNdc = glm::vec2(markerClip) / markerClip.w;
@@ -606,7 +717,9 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 renderPipeline, renderActors);
             renderPipeline.finishFrame();
             debugPanel.render();
-            if (config.captureMode) {
+            const bool cameraTestCaptureDue = config.cameraTestMode && !cameraTestCaptureWritten && cameraTestPhase >= 0 &&
+                cameraTestPhaseElapsed + 1.0e-9 >= cameraTestPhaseDurations[cameraTestPhase];
+            if (config.captureMode && (!config.cameraTestMode || cameraTestCaptureDue)) {
                 const int width = drawableWidth;
                 const int height = drawableHeight;
                 std::vector<unsigned char> pixels(static_cast<std::size_t>(width) * height * 4U);
@@ -663,9 +776,10 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     for (std::size_t column = 0; column < static_cast<std::size_t>(width) * 4U; ++column)
                         std::swap(pixels[top + column], pixels[bottom + column]);
                 }
-                const std::filesystem::path directory = "captures";
+                const std::filesystem::path directory = config.cameraTestMode
+                    ? std::filesystem::path("captures") / "camera-test" : std::filesystem::path("captures");
                 std::filesystem::create_directories(directory);
-                const std::string name = captureNames[captureIndex];
+                const std::string name = config.cameraTestMode ? cameraTestCaptureNames[captureIndex] : captureNames[captureIndex];
                 const std::string captureSuffix = config.captureSuffix +
                     (config.captureHdrEnabled ? "" : "_no_hdr");
                 const std::filesystem::path imagePath = directory / (name + captureSuffix + ".png");
@@ -696,14 +810,70 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     {"boss_position", {player.bossPosition.x, player.bossPosition.y, player.bossPosition.z}},
                     {"resolution", {width, height}}
                 };
+                const float pivotX = cameraMetrics.pivotNdc.x;
+                const float pivotY = cameraMetrics.pivotNdc.y;
+                const float armClearDistance = renderer.cameraObstructionDistance(
+                    cameraMetrics.lookAt, cameraMetrics.position, 0.2F);
+                const bool pivotInFrame = pivotX >= -0.12F && pivotX <= 0.12F &&
+                    pivotY >= -0.35F && pivotY <= -0.05F;
+                const bool cameraOutsideCollider = cameraMetrics.actualArmLength <= armClearDistance + 0.02F;
+                const bool markerReadbackPass = markerDetectedDistance >= 0 ||
+                    (renderPipeline.captureMarkerSourceRgba()[0] >= 240 &&
+                     renderPipeline.captureMarkerSourceRgba()[1] <= 8 &&
+                     renderPipeline.captureMarkerSourceRgba()[2] >= 240);
+                const bool cameraTestFramePass = !config.cameraTestMode ||
+                    (pivotInFrame && cameraMetrics.actualArmLength >= 2.0F && cameraOutsideCollider &&
+                        captureMarkerInFrame && markerReadbackPass &&
+                        cameraMetrics.playerNdcMaximum.y < 1.0F &&
+                        (cameraTestPhase != 3 || (cameraTestMinimumPitch <= -9.99F &&
+                            cameraTestMaximumPitch >= 69.99F)));
+                bool fpsRotationPass = true;
+                if (config.cameraTestMode && cameraTestPhase <= 2) {
+                    cameraTestYawResults[cameraTestPhase] = cameraYaw;
+                    if (cameraTestPhase == 2) {
+                        fpsRotationPass = std::abs(cameraTestYawResults[0] - cameraYaw) <= 0.01F &&
+                            std::abs(cameraTestYawResults[1] - cameraYaw) <= 0.01F;
+                    }
+                }
+                if (config.cameraTestMode && !fpsRotationPass)
+                    throw std::runtime_error("camera-test FPS rotation mismatch: 30=" +
+                        std::to_string(cameraTestYawResults[0]) + " 60=" +
+                        std::to_string(cameraTestYawResults[1]) + " 144=" + std::to_string(cameraYaw));
+                if (config.cameraTestMode && !cameraTestFramePass) {
+                    throw std::runtime_error("camera-test frame failed: pivot=" + std::to_string(pivotX) + "," +
+                        std::to_string(pivotY) + " arm=" + std::to_string(cameraMetrics.actualArmLength) +
+                        " clear=" + std::to_string(armClearDistance) + " marker=" +
+                        std::to_string(markerDetectedDistance) + " source=" +
+                        std::to_string(renderPipeline.captureMarkerSourceRgba()[0]) + "," +
+                        std::to_string(renderPipeline.captureMarkerSourceRgba()[1]) + "," +
+                        std::to_string(renderPipeline.captureMarkerSourceRgba()[2]) +
+                        " pivotIn=" + std::to_string(pivotInFrame) + " outside=" +
+                        std::to_string(cameraOutsideCollider) + " markerIn=" +
+                        std::to_string(captureMarkerInFrame) + " playerMaxY=" +
+                        std::to_string(cameraMetrics.playerNdcMaximum.y));
+                }
+                nlohmann::json testReport{
+                    {"camera_test", config.cameraTestMode}, {"phase", config.cameraTestMode ? name : ""},
+                    {"simulated_render_fps", config.cameraTestMode ? cameraTestPhaseFps[cameraTestPhase] : 0},
+                    {"yaw_degrees", cameraYaw}, {"pitch_degrees", cameraPitch},
+                    {"observed_min_pitch_degrees", cameraTestMinimumPitch},
+                    {"observed_max_pitch_degrees", cameraTestMaximumPitch},
+                    {"mouse_sensitivity_deg_per_pixel", orbitCameraConfig.mouseSensitivity},
+                    {"pivot_in_frame", pivotInFrame}, {"camera_outside_collider", cameraOutsideCollider},
+                    {"arm_clear_distance_m", armClearDistance}, {"blocking_collider", cameraMetrics.blockingCollider},
+                    {"fps_rotation_pass", fpsRotationPass},
+                    {"camera_test_pass", cameraTestFramePass}
+                };
                 std::ofstream reportFile(directory / (name + captureSuffix + ".json"));
                 if (!reportFile) throw std::runtime_error("Failed to write capture telemetry JSON: " + name);
-                reportFile << report.dump(2) << '\n';
+                if (config.cameraTestMode) reportFile << testReport.dump(2) << '\n';
+                else reportFile << report.dump(2) << '\n';
                 std::cout << "Captured " << name << ": NDC(" << cameraMetrics.playerNdc.x << ", "
                           << cameraMetrics.playerNdc.y << "), arm " << cameraMetrics.actualArmLength
                           << " m, blocker " << cameraMetrics.blockingCollider << '\n';
                 ++captureIndex;
-                if (captureIndex >= captureNames.size()) running = false;
+                if (config.cameraTestMode) cameraTestCaptureWritten = true;
+                if (captureIndex >= (config.cameraTestMode ? cameraTestCaptureNames.size() : captureNames.size())) running = false;
             }
             SDL_GL_SwapWindow(window);
         }

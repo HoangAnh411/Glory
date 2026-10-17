@@ -302,6 +302,13 @@ int main(int argc, char* argv[]) {
             config.captureSuffix = "_colliders";
         } else if (std::strcmp(argv[index], "--walk-test") == 0) {
             walkTestMode = true;
+        } else if (std::strcmp(argv[index], "--camera-test") == 0) {
+            config.cameraTestMode = true;
+            config.captureMode = true;
+            config.captureCollisionDebug = true;
+            config.captureSuffix = "_camera-test";
+            config.windowWidth = 640;
+            config.windowHeight = 360;
         } else if (std::strcmp(argv[index], "--connect") == 0 && index + 1 < argc) {
             const std::string endpoint(argv[++index]);
             const std::size_t separator = endpoint.rfind(':');
@@ -320,7 +327,7 @@ int main(int argc, char* argv[]) {
             connectHost = endpoint.substr(0, separator);
             connectPort = static_cast<std::uint16_t>(parsedPort);
         } else {
-            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture|--capture-no-hdr|--capture-720p|--capture-high-dpi|--capture-colliders|--walk-test] [--connect IPv4:port]\n";
+            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture|--capture-no-hdr|--capture-720p|--capture-high-dpi|--capture-colliders|--walk-test|--camera-test] [--connect IPv4:port]\n";
             return 2;
         }
     }

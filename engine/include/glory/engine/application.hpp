@@ -350,6 +350,7 @@ struct ApplicationConfig {
     bool hiddenWindow = false;
     std::uint64_t smokeTestTickLimit = 0;
     bool captureMode = false;
+    bool cameraTestMode = false;
     bool captureHdrEnabled = true;
     bool highPixelDensity = false;
     bool captureCollisionDebug = false;
