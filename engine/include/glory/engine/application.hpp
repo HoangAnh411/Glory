@@ -304,6 +304,9 @@ struct PlayerFrameState {
     int attackAimMode = 1;
     bool attackAimTargetValid = false;
     glm::vec3 attackAimTargetPosition{0.0F};
+    float activeSkillDamage = -1.0F;
+    float activeSkillCooldown = -1.0F;
+    float activeSkillHitboxRadius = -1.0F;
     std::vector<std::string> activeTriggerStates;
     glm::vec3 practiceDummyPosition{0.0F};
     float practiceDummyYaw = 0.0F;

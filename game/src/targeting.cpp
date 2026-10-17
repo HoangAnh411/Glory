@@ -94,7 +94,12 @@ TargetingResult chooseLockTarget(const CollisionWorld& world, const glm::vec3& p
         !std::isfinite(lockRange) || selectionRange <= 0.0F || lockRange <= 0.0F || !result.valid ||
         result.distance > selectionRange || !hasLineOfSight(world, playerPosition, targetPosition)) {
         result.valid = false;
+        return result;
     }
+    const float cameraRadians = cameraYawDegrees * degreesToRadians;
+    const glm::vec3 cameraForward{std::cos(cameraRadians), 0.0F, std::sin(cameraRadians)};
+    const glm::vec3 targetDirection = (targetPosition - playerPosition) / result.distance;
+    if (glm::dot(cameraForward, targetDirection) <= 0.0F) result.valid = false;
     return result;
 }
 

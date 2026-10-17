@@ -26,6 +26,10 @@ int main() {
     expect(!hasLineOfSight(world, player, target), "blocking AABB hides a target");
     expect(!chooseLockTarget(world, player, 0.0F, target, true, 25.0F, 30.0F).valid,
         "lock selection rejects a target behind a wall");
+    expect(!chooseLockTarget(CollisionWorld{}, player, 180.0F, target, true, 25.0F, 30.0F).valid,
+        "lock selection rejects a target behind the camera");
+    expect(!chooseLockTarget(CollisionWorld{}, player, 0.0F, {31.0F, 0.0F, 0.0F}, true, 25.0F, 30.0F).valid,
+        "lock selection rejects a target beyond the selection range");
     if (failures != 0) return 1;
     std::cout << "All targeting tests passed\n";
     return 0;

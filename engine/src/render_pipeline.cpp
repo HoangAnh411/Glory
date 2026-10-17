@@ -120,11 +120,27 @@ void RenderPipeline::logPassState(const char* pass, const char* edge) noexcept {
 }
 
 void RenderPipeline::setCaptureMarkerNdc(const glm::vec2& ndc) noexcept {
-    captureMarkerEnabled_ = std::isfinite(ndc.x) && std::isfinite(ndc.y) && width_ > 0 && height_ > 0 &&
-        ndc.x >= -1.0F && ndc.x <= 1.0F && ndc.y >= -1.0F && ndc.y <= 1.0F;
+    captureMarkerCount_ = 0;
+    if (!std::isfinite(ndc.x) || !std::isfinite(ndc.y) || width_ <= 0 || height_ <= 0 ||
+        ndc.x < -1.0F || ndc.x > 1.0F || ndc.y < -1.0F || ndc.y > 1.0F) {
+        captureMarkerEnabled_ = false;
+        return;
+    }
+    captureMarkerPixel_ = {std::clamp(static_cast<int>((ndc.x * 0.5F + 0.5F) * width_), 0, width_ - 1),
+        std::clamp(static_cast<int>((ndc.y * 0.5F + 0.5F) * height_), 0, height_ - 1)};
+    captureMarkerPixels_[0] = captureMarkerPixel_;
+    captureMarkerCount_ = 1;
+    captureMarkerEnabled_ = true;
+}
+
+void RenderPipeline::setCaptureMarkerNdcPair(const glm::vec2& first, const glm::vec2& second) noexcept {
+    setCaptureMarkerNdc(first);
     if (!captureMarkerEnabled_) return;
-    captureMarkerPixel_[0] = std::clamp(static_cast<int>((ndc.x * 0.5F + 0.5F) * width_), 0, width_ - 1);
-    captureMarkerPixel_[1] = std::clamp(static_cast<int>((ndc.y * 0.5F + 0.5F) * height_), 0, height_ - 1);
+    if (!std::isfinite(second.x) || !std::isfinite(second.y) || second.x < -1.0F || second.x > 1.0F ||
+        second.y < -1.0F || second.y > 1.0F) return;
+    captureMarkerPixels_[1] = {std::clamp(static_cast<int>((second.x * 0.5F + 0.5F) * width_), 0, width_ - 1),
+        std::clamp(static_cast<int>((second.y * 0.5F + 0.5F) * height_), 0, height_ - 1)};
+    captureMarkerCount_ = 2;
 }
 
 void RenderPipeline::resize(int width, int height) {
@@ -305,12 +321,16 @@ void RenderPipeline::finishFrame() {
         gl_.bindFramebuffer(GL_FRAMEBUFFER, hdrEnabled_ ? framebuffer_ : 0);
         gl_.viewport(0, 0, width_, height_);
         gl_.enable(GL_SCISSOR_TEST);
-        gl_.scissor(std::max(0, captureMarkerPixel_[0] - 1), std::max(0, captureMarkerPixel_[1] - 1),
-            std::min(3, width_), std::min(3, height_));
-        gl_.clearColor(2.0F, 0.0F, 2.0F, 1.0F);
-        gl_.clear(GL_COLOR_BUFFER_BIT);
+        for (std::size_t index = 0; index < captureMarkerCount_; ++index) {
+            captureMarkerPixel_ = captureMarkerPixels_[index];
+            gl_.scissor(std::max(0, captureMarkerPixel_[0] - 1), std::max(0, captureMarkerPixel_[1] - 1),
+                std::min(3, width_), std::min(3, height_));
+            gl_.clearColor(2.0F, 0.0F, 2.0F, 1.0F);
+            gl_.clear(GL_COLOR_BUFFER_BIT);
+        }
         gl_.disable(GL_SCISSOR_TEST);
         if (hdrEnabled_) {
+            captureMarkerPixel_ = captureMarkerPixels_[0];
             gl_.readPixels(captureMarkerPixel_[0], captureMarkerPixel_[1], 1, 1,
                 GL_RGBA, GL_UNSIGNED_BYTE, captureMarkerSourceRgba_.data());
             std::cerr << "[render-diag] HDR marker source rgba="
@@ -319,6 +339,7 @@ void RenderPipeline::finishFrame() {
                       << static_cast<int>(captureMarkerSourceRgba_[2]) << '\n';
         }
         captureMarkerEnabled_ = false;
+        captureMarkerCount_ = 0;
     }
     if (hdrEnabled_) {
         gl_.bindFramebuffer(GL_FRAMEBUFFER, 0);

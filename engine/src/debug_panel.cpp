@@ -34,7 +34,7 @@ bool inputString(const char* label, std::string& value, ImGuiInputTextFlags flag
     return true;
 }
 
-void saveCameraSettings(const ThirdPersonCamera& camera) {
+void saveCameraSettings(const ThirdPersonCamera& camera, int attackAimMode) {
     std::error_code error;
     std::filesystem::create_directories("settings", error);
     if (error) return;
@@ -42,7 +42,8 @@ void saveCameraSettings(const ThirdPersonCamera& camera) {
     if (!output) return;
     output << nlohmann::json{{"distance", camera.distance()}, {"fov", camera.fieldOfViewDegrees()},
         {"shoulder", camera.shoulderOffset()}, {"mouse_sensitivity", camera.mouseSensitivity()},
-        {"invert_mouse_y", camera.invertMouseY()}, {"auto_return", camera.autoReturnEnabled()}}.dump(2) << '\n';
+        {"invert_mouse_y", camera.invertMouseY()}, {"auto_return", camera.autoReturnEnabled()},
+        {"attack_aim_mode", std::clamp(attackAimMode, 0, 2)}}.dump(2) << '\n';
 }
 
 std::string diagnosticEscape(std::string_view value) {
@@ -674,6 +675,7 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     if (ImGui::Combo("Attack direction", &attackAimMode, aimModes, IM_ARRAYSIZE(aimModes))) {
                         statusCommand = attackAimMode == 0 ? "aim_mode_manual" :
                             (attackAimMode == 1 ? "aim_mode_assist" : "aim_mode_auto");
+                        cameraSettingsChanged = true;
                     }
                     float orbitDistance = orbitCamera.distance();
                     if (ImGui::SliderFloat("Orbit distance", &orbitDistance, 3.0F, 8.0F, "%.1f m")) {
@@ -690,7 +692,7 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                         orbitCamera.setShoulderOffset(shoulder);
                         cameraSettingsChanged = true;
                     }
-                    if (cameraSettingsChanged) saveCameraSettings(orbitCamera);
+                    if (cameraSettingsChanged) saveCameraSettings(orbitCamera, attackAimMode);
                     ImGui::Text("Position: %.2f, %.2f, %.2f | Yaw: %.1f | Pitch: %.1f",
                         cameraPosition.x, cameraPosition.y, cameraPosition.z, cameraYaw, cameraPitch);
                     ImGui::Text("Spring arm blocker: %s | clear distance: %.2f m",

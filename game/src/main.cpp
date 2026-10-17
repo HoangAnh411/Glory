@@ -1220,8 +1220,6 @@ int main(int argc, char* argv[]) {
             boss.setSpawnTransform(farTarget ? glm::vec3{35.0F, 0.0F, 0.0F} : glm::vec3{3.0F, 0.0F, 0.0F}, 0.0F);
             combat.dummy().hurtbox.base = boss.position();
             combat.dummy().currentHp = boss.currentHp();
-            std::cout << "[combat-test] setup " << statusCommand << " boss=" << boss.position().x << ',' << boss.position().z
-                      << " los=" << glory::game::hasLineOfSight(collisionWorld, controller.state().position, boss.position()) << '\n';
             if (statusCommand == "combat_setup_manual") attackAimMode = glory::game::AttackAimMode::Manual;
             else if (statusCommand == "combat_setup_assist") attackAimMode = glory::game::AttackAimMode::Assist;
             else if (statusCommand == "combat_setup_auto") attackAimMode = glory::game::AttackAimMode::Auto;
@@ -1398,6 +1396,9 @@ int main(int argc, char* argv[]) {
         frame.attackAimMode = static_cast<int>(attackAimMode);
         frame.attackAimTargetValid = attackTarget.valid;
         frame.attackAimTargetPosition = attackTarget.position;
+        frame.activeSkillDamage = combat.activeSkillDamage();
+        frame.activeSkillCooldown = combat.activeSkillCooldown();
+        frame.activeSkillHitboxRadius = combat.activeSkillHitboxRadius();
         frame.practiceDummyPosition = practiceDummyPosition;
         frame.practiceDummyYaw = practiceDummyYaw;
         for (const std::string& activeId : worldEncounter.activeTriggerIds()) {

@@ -481,6 +481,21 @@ float CombatSystem::maximumAttackRange() const noexcept {
     return maximumRange;
 }
 
+float CombatSystem::activeSkillDamage() const noexcept {
+    const SkillDefinition* skill = registry_.find(activeSkillId_);
+    return skill ? skill->damage : -1.0F;
+}
+
+float CombatSystem::activeSkillCooldown() const noexcept {
+    const SkillDefinition* skill = registry_.find(activeSkillId_);
+    return skill ? skill->cooldown : -1.0F;
+}
+
+float CombatSystem::activeSkillHitboxRadius() const noexcept {
+    const SkillDefinition* skill = registry_.find(activeSkillId_);
+    return skill ? skill->hitboxRadius : -1.0F;
+}
+
 void CombatSystem::resetDummy() noexcept {
     dummy_.currentHp = dummy_.maxHp;
     dummy_.hitCount = 0;

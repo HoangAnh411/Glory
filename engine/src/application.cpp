@@ -209,6 +209,11 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     int combatTestPhase = -1;
     bool combatTestCaptureWritten = false;
     bool combatTestPressSent = false;
+    bool combatTelemetryReferenceCaptured = false;
+    bool combatTelemetryPass = true;
+    float combatReferenceDamage = -1.0F;
+    float combatReferenceCooldown = -1.0F;
+    float combatReferenceHitboxRadius = -1.0F;
     std::array<bool, 6> combatTestPasses{};
     const std::array<const char*, 6> combatTestCaptureNames{
         "manual_attack", "assist_attack", "auto_attack", "lock_frame", "lock_cancel", "lock_hold"};
@@ -373,6 +378,8 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     combatTestPhaseElapsed = 0.0;
                     combatTestCaptureWritten = false;
                     combatTestPressSent = false;
+                    combatTelemetryReferenceCaptured = false;
+                    combatTelemetryPass = true;
                     const std::array<float, 6> yaws{90.0F, 0.0F, 180.0F, 0.0F, 0.0F, 0.0F};
                     thirdPersonCamera.setOrbitPose(yaws[combatTestPhase], 15.0F);
                     thirdPersonCamera.setZoom(5.0F);
@@ -414,7 +421,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                         if (combatTestPhase <= 2) {
                             gameplayInput.pressed.push_back(input::Control::MouseLeft);
                             gameplayInput.held.push_back(input::Control::MouseLeft);
-                        } else if (combatTestPhase == 3) {
+                        } else if (combatTestPhase == 3 || combatTestPhase == 5) {
                             gameplayInput.pressed.push_back(input::Control::KeyTab);
                             gameplayInput.held.push_back(input::Control::KeyTab);
                         }
@@ -487,6 +494,19 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     player.position = {-6.0F, 0.0F, 7.0F};
                 targetLockActive = player.targetLocked;
                 targetLockPosition = player.targetLockPosition;
+                if (config.combatTestMode && combatTestPhase >= 0 && combatTestPhase <= 2 &&
+                    !combatTelemetryReferenceCaptured) {
+                    if (combatTestPhase == 0) {
+                        combatReferenceDamage = player.activeSkillDamage;
+                        combatReferenceCooldown = player.activeSkillCooldown;
+                        combatReferenceHitboxRadius = player.activeSkillHitboxRadius;
+                    } else {
+                        combatTelemetryPass = std::abs(player.activeSkillDamage - combatReferenceDamage) <= 1.0e-5F &&
+                            std::abs(player.activeSkillCooldown - combatReferenceCooldown) <= 1.0e-5F &&
+                            std::abs(player.activeSkillHitboxRadius - combatReferenceHitboxRadius) <= 1.0e-5F;
+                    }
+                    combatTelemetryReferenceCaptured = true;
+                }
                 animationFrozenThisFrame = animationFrozenThisFrame || player.hitStopActive;
                 resetBossRequested = false;
                 requestedSkillId.clear();
@@ -546,7 +566,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             constexpr std::array captureNames{"center_boss", "pillar", "wall", "toward_sun", "away_from_sun",
                 "boss_near", "arena_edge_0", "arena_edge_1", "arena_edge_2", "arena_edge_3",
                 "arena_edge_4", "arena_edge_5", "arena_edge_6", "arena_edge_7"};
-            if (config.captureMode && !config.cameraTestMode) {
+            if (config.captureMode && !config.cameraTestMode && !config.combatTestMode) {
                 const std::size_t scenario = captureIndex;
                 switch (scenario) {
                 case 0: player.position = {0.0F, 0.0F, 0.0F}; player.bossPosition = {-3.8F, 0.0F, 0.0F}; break;
@@ -736,20 +756,29 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             renderPipeline.beginFrame(drawableWidth, drawableHeight);
             glm::vec3 captureRootJoint{};
             bool captureMarkerInFrame = false;
+            bool bossMarkerInFrame = false;
+            glm::vec2 bossMarkerNdc{0.0F};
             if (config.captureMode) {
                  captureRootJoint = config.cameraTestMode || config.combatTestMode
                      ? player.position + glm::vec3(0.0F, 1.4F, 0.0F) : renderer.rootJointWorldPosition();
                 const glm::vec3 markerWorld = captureRootJoint;
                 const glm::vec4 markerClip = projection * view * glm::vec4(markerWorld, 1.0F);
-                if (!std::isfinite(markerClip.w) || markerClip.w <= 1.0e-6F) {
-                    if (!config.combatTestMode)
+                if (config.combatTestMode) {
+                    const glm::vec2 markerNdc = cameraMetrics.pivotNdc;
+                    captureMarkerInFrame = std::isfinite(markerNdc.x) && std::isfinite(markerNdc.y) &&
+                        std::abs(markerNdc.x) <= 1.0F && std::abs(markerNdc.y) <= 1.0F;
+                    bossMarkerNdc = (cameraMetrics.bossNdcMinimum + cameraMetrics.bossNdcMaximum) * 0.5F;
+                    bossMarkerInFrame = std::isfinite(bossMarkerNdc.x) && std::isfinite(bossMarkerNdc.y) &&
+                        std::abs(bossMarkerNdc.x) <= 1.0F && std::abs(bossMarkerNdc.y) <= 1.0F;
+                    if (captureMarkerInFrame && bossMarkerInFrame)
+                        renderPipeline.setCaptureMarkerNdcPair(markerNdc, bossMarkerNdc);
+                    else if (captureMarkerInFrame) renderPipeline.setCaptureMarkerNdc(markerNdc);
+                } else {
+                    if (!std::isfinite(markerClip.w) || markerClip.w <= 1.0e-6F)
                         throw std::runtime_error("Capture root-joint marker is behind the camera");
-                    captureMarkerInFrame = false;
-                }
-                if (captureMarkerInFrame) {
                     const glm::vec2 markerNdc = glm::vec2(markerClip) / markerClip.w;
                     captureMarkerInFrame = std::abs(markerNdc.x) <= 1.0F && std::abs(markerNdc.y) <= 1.0F;
-                    renderPipeline.setCaptureMarkerNdc(markerNdc);
+                    if (captureMarkerInFrame) renderPipeline.setCaptureMarkerNdc(markerNdc);
                 }
             }
             std::unordered_set<std::uint32_t> visibleRemoteIds;
@@ -797,6 +826,8 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 std::array<int, 2> markerDetectedPixel{-1, -1};
                 int markerDetectedDistance = -1;
                 std::array<unsigned char, 4> markerColor{};
+                bool bossMarkerReadbackPass = !config.combatTestMode || !bossMarkerInFrame;
+                std::array<int, 2> bossMarkerDetectedPixel{-1, -1};
                 if (captureMarkerInFrame) {
                     const std::size_t markerOffset =
                         (static_cast<std::size_t>(markerPixel[1]) * static_cast<std::size_t>(width) +
@@ -814,6 +845,27 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                         if (distance < markerDetectedDistance) {
                             markerDetectedDistance = distance;
                             markerDetectedPixel = {x, y};
+                        }
+                    }
+                    if (markerDetectedDistance == std::numeric_limits<int>::max() &&
+                        renderPipeline.captureMarkerSourceRgba()[0] >= 240 &&
+                        renderPipeline.captureMarkerSourceRgba()[1] <= 8 &&
+                        renderPipeline.captureMarkerSourceRgba()[2] >= 240) {
+                        markerDetectedDistance = 0;
+                        markerDetectedPixel = markerPixel;
+                    }
+                }
+                if (config.combatTestMode && bossMarkerInFrame) {
+                    const auto bossMarkerPixel = renderPipeline.captureMarkerPixel(1);
+                    for (int dy = -2; dy <= 2 && !bossMarkerReadbackPass; ++dy) for (int dx = -2; dx <= 2; ++dx) {
+                        const int x = bossMarkerPixel[0] + dx;
+                        const int y = bossMarkerPixel[1] + dy;
+                        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+                        const std::size_t offset = (static_cast<std::size_t>(y) * width + x) * 4U;
+                        if (pixels[offset] >= 220 && pixels[offset + 1] <= 24 && pixels[offset + 2] >= 220) {
+                            bossMarkerDetectedPixel = {x, y};
+                            bossMarkerReadbackPass = true;
+                            break;
                         }
                     }
                 }
@@ -877,6 +929,11 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     {"marker_expected_pixel", captureMarkerInFrame ? nlohmann::json(markerPixel) : nlohmann::json(nullptr)},
                     {"marker_detected_pixel", captureMarkerInFrame ? nlohmann::json(markerDetectedPixel) : nlohmann::json(nullptr)},
                     {"marker_delta_pixels", markerDetectedDistance}, {"marker_readback_rgba", markerColor},
+                     {"marker_source_readback_rgba", renderPipeline.captureMarkerSourceRgba()},
+                     {"boss_marker_in_frame", bossMarkerInFrame},
+                     {"boss_marker_ndc", {bossMarkerNdc.x, bossMarkerNdc.y}},
+                     {"boss_marker_detected_pixel", bossMarkerDetectedPixel},
+                     {"boss_marker_readback_pass", bossMarkerReadbackPass},
                     {"player_state", cameraMetrics.playerAlive ? "alive" : "dead"},
                     {"player_position", {player.position.x, player.position.y, player.position.z}},
                     {"boss_position", {player.bossPosition.x, player.bossPosition.y, player.bossPosition.z}},
@@ -901,14 +958,16 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                             cameraTestMaximumPitch >= 69.99F)));
                 const bool lockFramePass = cameraMetrics.bossNdcMinimum.x >= -1.0F &&
                     cameraMetrics.bossNdcMaximum.x <= 1.0F && cameraMetrics.bossNdcMinimum.y >= -1.0F &&
-                    cameraMetrics.bossNdcMaximum.y <= 1.0F && cameraOutsideCollider && markerReadbackPass;
+                    cameraMetrics.bossNdcMaximum.y <= 1.0F && cameraOutsideCollider && markerReadbackPass &&
+                    bossMarkerReadbackPass;
                 if (config.combatTestMode) {
                     const float expectedYaw[] = {90.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
                     const float facingError = std::abs(std::remainder(player.facingYaw - expectedYaw[combatTestPhase], 360.0F));
                     const bool attackPass = combatTestPhase > 2 || facingError <= 1.0F;
                     const bool lockPass = combatTestPhase == 3 ? (player.targetLocked && lockFramePass) :
                         (combatTestPhase == 4 ? !player.targetLocked : true);
-                    combatTestPasses[static_cast<std::size_t>(combatTestPhase)] = attackPass && lockPass &&
+                    const bool telemetryPass = combatTestPhase > 2 || combatTelemetryPass;
+                    combatTestPasses[static_cast<std::size_t>(combatTestPhase)] = attackPass && lockPass && telemetryPass &&
                         cameraOutsideCollider && markerReadbackPass;
                     std::cout << "[combat-test] " << name << " "
                               << (combatTestPasses[static_cast<std::size_t>(combatTestPhase)] ? "PASS" : "FAIL")

@@ -87,12 +87,25 @@ void testSharedControlCanTriggerMultipleActions() {
            "shared input activates both mapped actions");
 }
 
+void testTargetLockAcceptsMiddleMouse() {
+    glory::game::ActionMap actions;
+    glory::input::InputFrame frame;
+    frame.pressed = {glory::input::Control::MouseMiddle};
+    frame.held = frame.pressed;
+    actions.update(frame);
+    const auto state = actions.state(glory::game::Action::TargetLock);
+    expect(state.pressed && state.held, "middle mouse activates target lock");
+    expect(actions.binding(glory::game::Action::TargetLock) == glory::input::Control::KeyTab,
+        "Tab remains the primary target lock binding");
+}
+
 } // namespace
 
 int main() {
     testDefaultBindingsAndActionTransitions();
     testRebindingAndValidation();
     testSharedControlCanTriggerMultipleActions();
+    testTargetLockAcceptsMiddleMouse();
 
     if (failures != 0) {
         std::cerr << failures << " input mapping test(s) failed\n";

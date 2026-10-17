@@ -41,6 +41,7 @@ public:
     void setHdrEnabled(bool enabled) noexcept;
     void logPassState(const char* pass, const char* edge) noexcept;
     void setCaptureMarkerNdc(const glm::vec2& ndc) noexcept;
+    void setCaptureMarkerNdcPair(const glm::vec2& first, const glm::vec2& second) noexcept;
     [[nodiscard]] bool hdrEnabled() const noexcept { return hdrEnabled_; }
     void setExposure(float exposure) noexcept;
     [[nodiscard]] float exposure() const noexcept { return exposure_; }
@@ -53,6 +54,9 @@ public:
     [[nodiscard]] int targetWidth() const noexcept { return width_; }
     [[nodiscard]] int targetHeight() const noexcept { return height_; }
     [[nodiscard]] std::array<int, 2> captureMarkerPixel() const noexcept { return captureMarkerPixel_; }
+    [[nodiscard]] std::array<int, 2> captureMarkerPixel(std::size_t index) const noexcept {
+        return index < captureMarkerPixels_.size() ? captureMarkerPixels_[index] : std::array<int, 2>{};
+    }
     [[nodiscard]] std::array<unsigned char, 4> captureMarkerSourceRgba() const noexcept { return captureMarkerSourceRgba_; }
     [[nodiscard]] ShadowMap& shadowMap() noexcept { return shadowMap_; }
 
@@ -96,6 +100,8 @@ private:
     std::uint64_t resizeCount_ = 0;
     std::set<std::string> loggedPassStates_;
     std::array<int, 2> captureMarkerPixel_{};
+    std::array<std::array<int, 2>, 2> captureMarkerPixels_{};
+    std::size_t captureMarkerCount_ = 0;
     std::array<unsigned char, 4> captureMarkerSourceRgba_{};
     bool captureMarkerEnabled_ = false;
 };

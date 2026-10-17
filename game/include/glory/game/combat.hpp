@@ -120,6 +120,9 @@ public:
     [[nodiscard]] bool attackAnimationRequested() const noexcept { return attackAnimationRequested_; }
     [[nodiscard]] bool attackCanceled() const noexcept { return attackCanceled_; }
     [[nodiscard]] float maximumAttackRange() const noexcept;
+    [[nodiscard]] float activeSkillDamage() const noexcept;
+    [[nodiscard]] float activeSkillCooldown() const noexcept;
+    [[nodiscard]] float activeSkillHitboxRadius() const noexcept;
 
 private:
     [[nodiscard]] bool startSkill(const std::string& skillId, bool comboTransition);

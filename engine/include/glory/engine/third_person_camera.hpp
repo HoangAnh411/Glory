@@ -70,15 +70,18 @@ public:
             }
         }
         if (locked_ && finite(lockTarget_)) {
-            const glm::vec3 diff = lockTarget_ - target;
+            const glm::vec3 aimOrigin = target + targetOffset_;
+            const glm::vec3 diff = lockTarget_ + glm::vec3(0.0F, 1.1F, 0.0F) - aimOrigin;
             const float horizontalDist = std::sqrt(diff.x * diff.x + diff.z * diff.z);
             if (horizontalDist > 0.1F) {
                 const float desiredYaw = glm::degrees(std::atan2(diff.z, diff.x));
                 const float yawDiff = std::remainder(desiredYaw - yawDegrees_, 360.0F);
-                yawDegrees_ = std::remainder(yawDegrees_ + yawDiff * 0.12F, 360.0F);
+                const float rotationBlend = 1.0F - std::exp(-12.0F * deltaSeconds);
+                yawDegrees_ = std::remainder(yawDegrees_ + yawDiff * rotationBlend, 360.0F);
 
-                const float desiredPitch = glm::clamp(glm::degrees(std::atan2(diff.y, horizontalDist)) + 8.0F, 5.0F, 35.0F);
-                pitchDegrees_ += (desiredPitch - pitchDegrees_) * 0.12F;
+                const float desiredPitch = glm::clamp(glm::degrees(std::atan2(diff.y, horizontalDist)),
+                    minimumPitchDegrees, maximumPitchDegrees);
+                pitchDegrees_ += (desiredPitch - pitchDegrees_) * rotationBlend;
             }
             if (std::isfinite(mouseDeltaY)) {
                 pitchDegrees_ = std::clamp(pitchDegrees_ + mouseDeltaY * mouseSensitivity_ * (invertMouseY_ ? -1.0F : 1.0F),
