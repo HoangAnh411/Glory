@@ -42,7 +42,7 @@ void saveCameraSettings(const ThirdPersonCamera& camera) {
     if (!output) return;
     output << nlohmann::json{{"distance", camera.distance()}, {"fov", camera.fieldOfViewDegrees()},
         {"shoulder", camera.shoulderOffset()}, {"mouse_sensitivity", camera.mouseSensitivity()},
-        {"invert_mouse_y", camera.invertMouseY()}}.dump(2) << '\n';
+        {"invert_mouse_y", camera.invertMouseY()}, {"auto_return", camera.autoReturnEnabled()}}.dump(2) << '\n';
 }
 
 std::string diagnosticEscape(std::string_view value) {
@@ -656,6 +656,11 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     bool invertMouseY = orbitCamera.invertMouseY();
                     if (ImGui::Checkbox("Invert camera Y", &invertMouseY)) {
                         orbitCamera.setInvertMouseY(invertMouseY);
+                        cameraSettingsChanged = true;
+                    }
+                    bool autoReturn = orbitCamera.autoReturnEnabled();
+                    if (ImGui::Checkbox("Auto-return behind character", &autoReturn)) {
+                        orbitCamera.setAutoReturnEnabled(autoReturn);
                         cameraSettingsChanged = true;
                     }
                     float orbitDistance = orbitCamera.distance();

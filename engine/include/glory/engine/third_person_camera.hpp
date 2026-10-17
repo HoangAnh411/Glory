@@ -22,18 +22,20 @@ struct ThirdPersonCameraConfig {
     float farPlane = 100.0F;
     float mouseSensitivity = 0.1F;
     bool invertMouseY = false;
+    bool autoReturnEnabled = false;
 };
 
 class ThirdPersonCamera {
 public:
     explicit ThirdPersonCamera(const ThirdPersonCameraConfig& config = {})
-        : distance_(config.distance), effectiveDistance_(config.distance),
+        : distance_(config.distance), smoothedDistance_(config.distance), effectiveDistance_(config.distance),
           shoulderOffset_(config.shoulderOffset), framingOffset_(config.framingOffset),
           targetOffset_(config.targetOffset),
           yawDegrees_(config.yawDegrees), pitchDegrees_(config.pitchDegrees),
           fieldOfViewDegrees_(config.fieldOfViewDegrees), aspectRatio_(config.aspectRatio),
           nearPlane_(config.nearPlane), farPlane_(config.farPlane),
-          mouseSensitivity_(config.mouseSensitivity), invertMouseY_(config.invertMouseY) {
+          mouseSensitivity_(config.mouseSensitivity), invertMouseY_(config.invertMouseY),
+          autoReturnEnabled_(config.autoReturnEnabled) {
         if (!finite(targetOffset_) || !std::isfinite(distance_) || distance_ <= 0.0F ||
             !std::isfinite(shoulderOffset_) || !std::isfinite(framingOffset_) ||
             !std::isfinite(yawDegrees_) || !std::isfinite(pitchDegrees_) ||
@@ -49,6 +51,10 @@ public:
 
     void update(const glm::vec3& target, float mouseDeltaX, float mouseDeltaY,
         float deltaSeconds = 1.0F / 60.0F) noexcept {
+        if (std::isfinite(deltaSeconds) && deltaSeconds > 0.0F) {
+            const float zoomBlend = 1.0F - std::exp(-deltaSeconds / zoomSmoothSeconds);
+            smoothedDistance_ += (distance_ - smoothedDistance_) * zoomBlend;
+        }
         if (finite(target) && std::isfinite(deltaSeconds) && deltaSeconds > 0.0F) {
             if (!targetInitialized_) {
                 target_ = target;
@@ -63,7 +69,7 @@ public:
                 targetVelocity_ = (targetVelocity_ - springOmega * temporary) * decay;
             }
         }
-        if (locked_ && finite(lockTarget_)) {
+        if (autoReturnEnabled_ && locked_ && finite(lockTarget_)) {
             const glm::vec3 diff = lockTarget_ - target;
             const float horizontalDist = std::sqrt(diff.x * diff.x + diff.z * diff.z);
             if (horizontalDist > 0.1F) {
@@ -94,7 +100,7 @@ public:
     }
     void constrainArm(float maximumDistance, float deltaSeconds) noexcept {
         if (!std::isfinite(maximumDistance) || !std::isfinite(deltaSeconds) || deltaSeconds < 0.0F) return;
-        const float safeDistance = std::clamp(maximumDistance, minimumArmDistance, distance_);
+        const float safeDistance = std::clamp(maximumDistance, 0.0F, distance_);
         if (safeDistance < effectiveDistance_) effectiveDistance_ = safeDistance;
         else effectiveDistance_ = std::min(safeDistance, effectiveDistance_ + deltaSeconds * armReturnSpeed);
     }
@@ -133,7 +139,7 @@ public:
         const float pitch = glm::radians(pitchDegrees_);
         const glm::vec3 forward{std::cos(yaw) * std::cos(pitch), -std::sin(pitch),
             std::sin(yaw) * std::cos(pitch)};
-        return targetPosition() - forward * distance_;
+        return targetPosition() - forward * smoothedDistance_;
     }
     [[nodiscard]] float yawDegrees() const noexcept { return yawDegrees_; }
     [[nodiscard]] float pitchDegrees() const noexcept { return pitchDegrees_; }
@@ -150,6 +156,8 @@ public:
     [[nodiscard]] float mouseSensitivity() const noexcept { return mouseSensitivity_; }
     void setInvertMouseY(bool value) noexcept { invertMouseY_ = value; }
     [[nodiscard]] bool invertMouseY() const noexcept { return invertMouseY_; }
+    void setAutoReturnEnabled(bool value) noexcept { autoReturnEnabled_ = value; }
+    [[nodiscard]] bool autoReturnEnabled() const noexcept { return autoReturnEnabled_; }
     void setShoulderOffset(float value) noexcept {
         if (std::isfinite(value)) shoulderOffset_ = std::clamp(value, 0.0F, 0.4F);
     }
@@ -172,13 +180,14 @@ private:
 
     static constexpr float minimumPitchDegrees = -10.0F;
     static constexpr float maximumPitchDegrees = 70.0F;
-    static constexpr float minimumArmDistance = 2.0F;
     static constexpr float armReturnSpeed = 10.0F;
+    static constexpr float zoomSmoothSeconds = 0.12F;
     static constexpr glm::vec3 worldUp{0.0F, 1.0F, 0.0F};
     glm::vec3 target_{0.0F};
     glm::vec3 targetVelocity_{0.0F};
     bool targetInitialized_ = false;
     float distance_;
+    float smoothedDistance_;
     float effectiveDistance_;
     float shoulderOffset_;
     float framingOffset_;
@@ -191,6 +200,7 @@ private:
     float farPlane_;
     float mouseSensitivity_;
     bool invertMouseY_ = false;
+    bool autoReturnEnabled_ = false;
     bool locked_ = false;
     glm::vec3 lockTarget_{0.0F};
 };

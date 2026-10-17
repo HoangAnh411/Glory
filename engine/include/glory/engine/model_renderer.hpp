@@ -59,6 +59,7 @@ public:
     void updateAnimation(float deltaSeconds);
     void setTransform(const glm::vec3& position, float yawDegrees) noexcept;
     void setDeadAppearance(bool dead) noexcept { deadAppearance_ = dead; }
+    void setCameraFade(float opacity) noexcept { cameraFadeOpacity_ = std::clamp(opacity, 0.0F, 1.0F); }
     [[nodiscard]] float cameraObstructionDistance(const glm::vec3& origin,
         const glm::vec3& desiredPosition, float cameraRadius = 0.2F) const noexcept;
     void setCameraColliders(std::vector<CameraCollider> colliders, glm::vec2 arenaCenter,
@@ -152,6 +153,7 @@ private:
     float ambientOcclusion_ = 1.0F;
     bool skyboxEnabled_ = true;
     bool deadAppearance_ = false;
+    float cameraFadeOpacity_ = 1.0F;
     glm::mat4 modelTransform_{1.0F};
     std::unique_ptr<Texture2D> arenaFloorTexture_;
     std::unordered_map<std::string, std::unique_ptr<Model>> propModelTemplates_;

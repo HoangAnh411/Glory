@@ -502,7 +502,19 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
     shader_.setSkinPalette(palette, model_.hasSkin());
     shader_.setModelMatrix(modelTransform_);
     model_.bindTexture(0);
+    const GLint characterOpacityLocation = gl_.getUniformLocation(shader_.program(), "u_Opacity");
+    if (characterOpacityLocation >= 0) gl_.uniform1f(characterOpacityLocation,
+        deadAppearance_ ? 0.28F : cameraFadeOpacity_);
+    if (cameraFadeOpacity_ < 0.999F) {
+        gl_.enable(GL_BLEND);
+        gl_.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        gl_.depthMask(GL_FALSE);
+    }
     model_.draw();
+    if (cameraFadeOpacity_ < 0.999F) {
+        gl_.depthMask(GL_TRUE);
+        gl_.disable(GL_BLEND);
+    }
     for (const RenderActor& actor : actors) {
         if (!actor.renderer) continue;
         const ModelRenderer& source = *actor.renderer;

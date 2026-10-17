@@ -85,6 +85,17 @@ void testMouseDeltaDoesNotDependOnFrameTime() {
         nearlyEqual(first.pitchDegrees(), second.pitchDegrees()),
         "mouse pixel deltas produce identical camera rotation across frame rates");
 }
+
+void testZoomEasesAndAutoReturnIsOptIn() {
+    glory::engine::ThirdPersonCamera camera;
+    camera.setZoom(8.0F);
+    expect(nearlyEqual(camera.effectiveDistance(), 5.0F), "zoom target does not teleport the camera arm");
+    camera.update({0.0F, 0.0F, 0.0F}, 0.0F, 0.0F, 0.1F);
+    camera.constrainArm(8.0F, 0.1F);
+    expect(camera.effectiveDistance() > 5.0F && camera.effectiveDistance() < 8.0F,
+        "zoom distance eases over time");
+    expect(!camera.autoReturnEnabled(), "camera auto-return is disabled by default");
+}
 } // namespace
 
 int main() {
@@ -92,6 +103,7 @@ int main() {
     testInvalidConfiguration();
     testOrbitPivotFramingAcrossYawPitchAndZoom();
     testMouseDeltaDoesNotDependOnFrameTime();
+    testZoomEasesAndAutoReturnIsOptIn();
     if (failures != 0) return 1;
     std::cout << "All third-person camera tests passed\n";
     return 0;
