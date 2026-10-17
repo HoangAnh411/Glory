@@ -95,6 +95,22 @@ void testWorldColliderData() {
         return box.minimum.x < 4.0F && box.maximum.x > 6.0F && box.minimum.z < 5.0F && box.maximum.z > 7.0F;
     });
     expect(containsWell, "world prop collider is transformed from local bounds into world space");
+
+    const glm::vec3 bossCornerPosition{8.25F, 0.0F, 5.565706F};
+    const Capsule bossCapsule{bossCornerPosition, 0.55F, 2.2F};
+    const CollisionResult depenetrated = world.resolve(bossCapsule, bossCornerPosition, {});
+    bool overlapsObstacle = false;
+    for (const Aabb& box : world.obstacles()) {
+        if (depenetrated.position.y >= box.maximum.y ||
+            depenetrated.position.y + bossCapsule.height <= box.minimum.y) continue;
+        const float closestX = std::clamp(depenetrated.position.x, box.minimum.x, box.maximum.x);
+        const float closestZ = std::clamp(depenetrated.position.z, box.minimum.z, box.maximum.z);
+        const float dx = depenetrated.position.x - closestX;
+        const float dz = depenetrated.position.z - closestZ;
+        overlapsObstacle |= dx * dx + dz * dz < bossCapsule.radius * bossCapsule.radius - 1.0e-4F;
+    }
+    expect(!overlapsObstacle,
+        "boss capsule is depenetrated from consecutive world boxes at the live walk-test failure point");
 }
 
 void testCapsuleActorSeparation() {
