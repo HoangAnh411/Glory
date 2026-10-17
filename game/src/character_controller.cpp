@@ -84,14 +84,14 @@ void CharacterController::update(const ActionMap& actions, float cameraYawDegree
 
     if (allowDodge && !stunned && actions.state(Action::Dodge).pressed &&
         state_.dodgeCooldownRemaining <= 0.0F && !state_.isDodging) {
-        if (targetLocked) {
+        if (hasMoveInput) {
+            state_.dodgeDirection = moveDirection;
+        } else if (targetLocked) {
             const glm::vec3 deltaToTarget{targetPosition.x - state_.position.x, 0.0F,
                 targetPosition.z - state_.position.z};
             const float targetDistance = glm::length(deltaToTarget);
             if (targetDistance > 1.0e-5F) state_.dodgeDirection = deltaToTarget / targetDistance;
-            else if (hasMoveInput) state_.dodgeDirection = moveDirection;
-        } else if (hasMoveInput) state_.dodgeDirection = moveDirection;
-        else {
+        } else {
             const float facingRadians = state_.facingYaw * degreesToRadians;
             state_.dodgeDirection = {-std::cos(facingRadians), 0.0F, -std::sin(facingRadians)};
         }

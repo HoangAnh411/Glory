@@ -180,6 +180,30 @@ void testDodgeSpeedIFramesAndCooldown() {
     controller.update(actions, -90.0F, 0.01);
     expect(controller.state().isDodging, "dodge can be used again after its cooldown expires");
 }
+
+void testLockOnDodgePrefersExplicitMovement() {
+    using glory::game::ActionMap;
+    using glory::game::CharacterController;
+    using glory::input::Control;
+
+    ActionMap movingActions;
+    CharacterController movingController;
+    applyInput(movingActions, {Control::KeyW, Control::KeyLeftShift}, {Control::KeyLeftShift});
+    movingController.update(movingActions, 0.0F, 1.0 / 60.0, true, 1.0F, false, true,
+        {0.0F, 0.0F, 10.0F});
+    expect(nearlyEqual(movingController.state().dodgeDirection.x, 1.0F) &&
+        nearlyEqual(movingController.state().dodgeDirection.z, 0.0F),
+        "lock-on dodge follows explicit camera-relative movement input");
+
+    ActionMap targetOnlyActions;
+    CharacterController targetOnlyController;
+    applyInput(targetOnlyActions, {Control::KeyLeftShift}, {Control::KeyLeftShift});
+    targetOnlyController.update(targetOnlyActions, 0.0F, 1.0 / 60.0, true, 1.0F, false, true,
+        {0.0F, 0.0F, 10.0F});
+    expect(nearlyEqual(targetOnlyController.state().dodgeDirection.x, 0.0F) &&
+        nearlyEqual(targetOnlyController.state().dodgeDirection.z, 1.0F),
+        "lock-on dodge without movement input follows the target");
+}
 } // namespace
 
 int main() {
@@ -189,6 +213,7 @@ int main() {
     testJumpGravityAndGrounding();
     testFacingRotationAndAttackEdge();
     testDodgeSpeedIFramesAndCooldown();
+    testLockOnDodgePrefersExplicitMovement();
     if (failures != 0) {
         std::cerr << failures << " character controller test(s) failed\n";
         return 1;
