@@ -353,7 +353,11 @@ struct ApplicationConfig {
     bool captureHdrEnabled = true;
     bool highPixelDensity = false;
     bool captureCollisionDebug = false;
-    struct CollisionDebugBox { glm::vec3 minimum{0.0F}; glm::vec3 maximum{0.0F}; };
+    struct CollisionDebugBox {
+        glm::vec3 minimum{0.0F};
+        glm::vec3 maximum{0.0F};
+        std::string name;
+    };
     std::vector<CollisionDebugBox> collisionDebugBoxes;
     glm::vec2 arenaCenter{0.0F};
     float arenaRadius = 0.0F;

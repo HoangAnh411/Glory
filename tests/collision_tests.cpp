@@ -97,6 +97,21 @@ void testWorldColliderData() {
     expect(containsWell, "world prop collider is transformed from local bounds into world space");
 }
 
+void testCapsuleActorSeparation() {
+    using namespace glory::game;
+    const CapsuleSeparation separated = separateCapsules(capsuleAt({0.0F, 0.0F, 0.0F}),
+        capsuleAt({0.5F, 0.0F, 0.0F}));
+    expect(separated.first.x < 0.0F && separated.second.x > 0.0F,
+        "overlapping actor capsules receive opposite horizontal corrections");
+    const glm::vec3 first = glm::vec3(0.0F) + separated.first;
+    const glm::vec3 second{0.5F + separated.second.x, 0.0F, separated.second.z};
+    expect(glm::distance(glm::vec2(first.x, first.z), glm::vec2(second.x, second.z)) >= 0.81F,
+        "separation clears the capsule radii plus skin");
+    expect(glm::length(separateCapsules(capsuleAt({0.0F, 0.0F, 0.0F}),
+        capsuleAt({2.0F, 0.0F, 0.0F})).first) == 0.0F,
+        "non-overlapping actor capsules do not move");
+}
+
 void testFrameRateIndependentWallBlocking() {
     using namespace glory::game;
     CollisionWorld world;
@@ -153,6 +168,7 @@ int main() {
     testWalkableAndSteepSlopes();
     testStepUpAndSampleTerrain();
     testWorldColliderData();
+    testCapsuleActorSeparation();
     testFrameRateIndependentWallBlocking();
     testCornerStabilityAndArenaBoundary();
     if (failures != 0) {

@@ -211,6 +211,35 @@ void Boss::setSpawnTransform(const glm::vec3& position, float yawDegrees) noexce
     position_ = position;
     yawDegrees_ = yawDegrees;
     hurtbox_.base = position;
+    const CollisionResult resolved = collisionWorld_.resolve(
+        {position_, hurtbox_.radius, hurtbox_.height}, position_, {}, 0.25F);
+    position_ = resolved.position;
+    hurtbox_.base = position_;
+}
+
+void Boss::setPosition(const glm::vec3& position) noexcept {
+    if (!std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z)) return;
+    const CollisionResult resolved = collisionWorld_.resolve(
+        {position_, hurtbox_.radius, hurtbox_.height}, position, position - position_, 0.25F);
+    position_ = resolved.position;
+    hurtbox_.base = position_;
+}
+
+void Boss::setCollisionWorld(CollisionWorld world) {
+    collisionWorld_ = std::move(world);
+    const CollisionResult resolved = collisionWorld_.resolve(
+        {position_, hurtbox_.radius, hurtbox_.height}, position_, {}, 0.25F);
+    position_ = resolved.position;
+    hurtbox_.base = position_;
+}
+
+void Boss::resolveWorldDisplacement(const glm::vec3& displacement) noexcept {
+    if (!std::isfinite(displacement.x) || !std::isfinite(displacement.y) ||
+        !std::isfinite(displacement.z)) return;
+    const CollisionResult resolved = collisionWorld_.resolve(
+        {position_, hurtbox_.radius, hurtbox_.height}, position_ + displacement, displacement, 0.25F);
+    position_ = resolved.position;
+    hurtbox_.base = position_;
 }
 
 void Boss::stagger(float duration) noexcept {
@@ -223,6 +252,10 @@ void Boss::reset() noexcept {
     phase_ = BossPhase::Phase1;
     position_ = config_.spawnPosition;
     yawDegrees_ = config_.spawnYaw;
+    hurtbox_.base = position_;
+    const CollisionResult resolved = collisionWorld_.resolve(
+        {position_, hurtbox_.radius, hurtbox_.height}, position_, {}, 0.25F);
+    position_ = resolved.position;
     hurtbox_.base = position_;
     slashCooldown_ = 0.0F;
     chargeCooldown_ = 0.0F;

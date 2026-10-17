@@ -41,11 +41,13 @@ public:
 
     [[nodiscard]] const std::string& name() const noexcept { return name_; }
     [[nodiscard]] const glm::vec3& position() const noexcept { return position_; }
-    void setPosition(const glm::vec3& position) noexcept { position_ = position; hurtbox_.base = position; }
+    void setPosition(const glm::vec3& position) noexcept;
     void setPosition(const glm::vec3& position, float yawDegrees) noexcept {
         setSpawnTransform(position, yawDegrees);
     }
     void setSpawnTransform(const glm::vec3& position, float yawDegrees) noexcept;
+    void setCollisionWorld(CollisionWorld world);
+    void resolveWorldDisplacement(const glm::vec3& displacement) noexcept;
     [[nodiscard]] float yawDegrees() const noexcept { return yawDegrees_; }
     [[nodiscard]] float currentHp() const noexcept { return currentHp_; }
     [[nodiscard]] float maxHp() const noexcept { return config_.maxHp; }

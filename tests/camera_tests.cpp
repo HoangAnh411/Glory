@@ -1,4 +1,5 @@
 #include "glory/engine/camera.hpp"
+#include "glory/engine/model_renderer.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -105,6 +106,22 @@ void testInvalidConfigurationAndDeltaAreHandled() {
     expect(nearlyEqual(camera.position().z, 3.0F), "negative delta does not move the camera");
 }
 
+void testCameraUsesLargeSharedCollidersAndSkipsSmallProps() {
+    using glory::engine::CameraCollider;
+    const std::vector<CameraCollider> colliders{
+        {{2.0F, 0.0F, -0.4F}, {2.2F, 1.1F, 0.4F}, "small lamp"},
+        {{5.0F, 0.0F, -1.0F}, {6.0F, 3.0F, 1.0F}, "stone wall"}};
+    std::string blocker;
+    const float distance = glory::engine::cameraColliderDistance(
+        {0.0F, 1.5F, 0.0F}, {10.0F, 1.5F, 0.0F}, colliders, 0.2F, &blocker);
+    expect(nearlyEqual(distance, 4.8F), "camera arm stops at the real AABB surface of the large wall");
+    expect(blocker == "stone wall", "camera obstruction reports the shared collider name");
+    const std::vector<CameraCollider> onlySmall{colliders.front()};
+    expect(nearlyEqual(glory::engine::cameraColliderDistance(
+        {0.0F, 1.5F, 0.0F}, {10.0F, 1.5F, 0.0F}, onlySmall), 10.0F),
+        "camera arm ignores props whose largest extent is below 1.2 meters");
+}
+
 } // namespace
 
 int main() {
@@ -112,6 +129,7 @@ int main() {
     testMouseLookAndPitchClamping();
     testMovementUsesFixedDeltaAndNormalizesDiagonalInput();
     testInvalidConfigurationAndDeltaAreHandled();
+    testCameraUsesLargeSharedCollidersAndSkipsSmallProps();
 
     if (failures != 0) {
         std::cerr << failures << " camera test(s) failed\n";

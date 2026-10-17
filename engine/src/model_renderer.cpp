@@ -534,41 +534,32 @@ void ModelRenderer::setTransform(const glm::vec3& position, float yawDegrees) no
         glm::rotate(glm::mat4(1.0F), glm::radians(yawDegrees), glm::vec3(0.0F, 1.0F, 0.0F));
 }
 
-float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
-    const glm::vec3& desiredPosition, float cameraRadius) const noexcept {
+float cameraColliderDistance(const glm::vec3& origin, const glm::vec3& desiredPosition,
+    const std::vector<CameraCollider>& colliders, float cameraRadius, std::string* blockerName,
+    glm::vec3* blockerPosition) noexcept {
     const glm::vec3 segment = desiredPosition - origin;
     const float segmentLength = glm::length(segment);
     if (!std::isfinite(segmentLength) || segmentLength <= 1.0e-4F ||
         !std::isfinite(cameraRadius) || cameraRadius < 0.0F) return 0.0F;
     const glm::vec3 direction = segment / segmentLength;
     float allowedDistance = segmentLength;
-    cameraBlockerName_ = "none";
-    cameraBlockerPosition_ = origin;
-    for (const StaticWorldProp& prop : staticProps_) {
-        const auto model = propModelTemplates_.find(prop.type);
-        if (model == propModelTemplates_.end() || !model->second) continue;
-        const auto [localMin, localMax] = model->second->localBounds();
-        if (!std::isfinite(localMin.x) || !std::isfinite(localMax.x)) continue;
-        const glm::vec3 scaledMin = glm::min(localMin * prop.scale, localMax * prop.scale);
-        const glm::vec3 scaledMax = glm::max(localMin * prop.scale, localMax * prop.scale);
-        const glm::vec3 size = scaledMax - scaledMin;
+    if (blockerName) *blockerName = "none";
+    if (blockerPosition) *blockerPosition = origin;
+    for (const CameraCollider& collider : colliders) {
+        const glm::vec3 size = collider.maximum - collider.minimum;
         if (std::max({size.x, size.y, size.z}) < 1.2F) continue;
-        const float yaw = glm::radians(-prop.yaw);
-        const glm::mat4 inverseRotation = glm::rotate(glm::mat4(1.0F), yaw, glm::vec3(0.0F, 1.0F, 0.0F));
-        const glm::vec3 localOrigin = glm::vec3(inverseRotation * glm::vec4(origin - prop.position, 1.0F));
-        const glm::vec3 localDirection = glm::vec3(inverseRotation * glm::vec4(direction, 0.0F));
-        const glm::vec3 boundsMin = scaledMin - glm::vec3(cameraRadius);
-        const glm::vec3 boundsMax = scaledMax + glm::vec3(cameraRadius);
+        const glm::vec3 boundsMin = collider.minimum - glm::vec3(cameraRadius);
+        const glm::vec3 boundsMax = collider.maximum + glm::vec3(cameraRadius);
         float entry = 0.0F;
         float exit = allowedDistance;
         bool hit = true;
         for (int axis = 0; axis < 3; ++axis) {
-            if (std::abs(localDirection[axis]) < 1.0e-6F) {
-                if (localOrigin[axis] < boundsMin[axis] || localOrigin[axis] > boundsMax[axis]) hit = false;
+            if (std::abs(direction[axis]) < 1.0e-6F) {
+                if (origin[axis] < boundsMin[axis] || origin[axis] > boundsMax[axis]) hit = false;
                 continue;
             }
-            float nearT = (boundsMin[axis] - localOrigin[axis]) / localDirection[axis];
-            float farT = (boundsMax[axis] - localOrigin[axis]) / localDirection[axis];
+            float nearT = (boundsMin[axis] - origin[axis]) / direction[axis];
+            float farT = (boundsMax[axis] - origin[axis]) / direction[axis];
             if (nearT > farT) std::swap(nearT, farT);
             entry = std::max(entry, nearT);
             exit = std::min(exit, farT);
@@ -576,20 +567,31 @@ float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
         }
         if (hit && entry >= 0.0F && entry < allowedDistance) {
             allowedDistance = entry;
-            cameraBlockerName_ = prop.type;
-            cameraBlockerPosition_ = prop.position;
+            if (blockerName) *blockerName = collider.name;
+            if (blockerPosition) *blockerPosition = (collider.minimum + collider.maximum) * 0.5F;
         }
     }
+    return allowedDistance;
+}
 
-    // Keep the camera inside the arena's visible 35-meter perimeter.
-    constexpr float arenaRadius = 34.0F;
-    const glm::vec2 start{origin.x, origin.z};
+float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
+    const glm::vec3& desiredPosition, float cameraRadius) const noexcept {
+    cameraBlockerName_ = "none";
+    cameraBlockerPosition_ = origin;
+    float allowedDistance = cameraColliderDistance(origin, desiredPosition, cameraColliders_, cameraRadius,
+        &cameraBlockerName_, &cameraBlockerPosition_);
+    const glm::vec3 segment = desiredPosition - origin;
+    const float segmentLength = glm::length(segment);
+    if (!std::isfinite(segmentLength) || segmentLength <= 1.0e-4F) return 0.0F;
+    const glm::vec3 direction = segment / segmentLength;
+
+    const glm::vec2 start{origin.x - cameraArenaCenter_.x, origin.z - cameraArenaCenter_.y};
     const glm::vec2 ray{direction.x, direction.z};
     const glm::vec2 end = start + ray * allowedDistance;
-    if (glm::dot(end, end) > arenaRadius * arenaRadius) {
+    if (cameraArenaRadius_ > 0.0F && glm::dot(end, end) > cameraArenaRadius_ * cameraArenaRadius_) {
         const float a = glm::dot(ray, ray);
         const float b = 2.0F * glm::dot(start, ray);
-        const float c = glm::dot(start, start) - arenaRadius * arenaRadius;
+        const float c = glm::dot(start, start) - cameraArenaRadius_ * cameraArenaRadius_;
         const float discriminant = b * b - 4.0F * a * c;
         if (a > 1.0e-6F && discriminant >= 0.0F) {
             const float exitDistance = (-b + std::sqrt(discriminant)) / (2.0F * a);
@@ -597,13 +599,20 @@ float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
             if (boundaryDistance < allowedDistance) {
                 allowedDistance = boundaryDistance;
                 cameraBlockerName_ = "arena perimeter";
-                cameraBlockerPosition_ = glm::vec3(end.x, origin.y, end.y);
+                cameraBlockerPosition_ = origin + direction * boundaryDistance;
             }
         }
     }
     lastCameraObstructionDistance_ = allowedDistance;
     if (cameraBlockerName_.empty()) cameraBlockerName_ = "none";
     return allowedDistance;
+}
+
+void ModelRenderer::setCameraColliders(std::vector<CameraCollider> colliders,
+    glm::vec2 arenaCenter, float arenaRadius) {
+    cameraColliders_ = std::move(colliders);
+    cameraArenaCenter_ = arenaCenter;
+    cameraArenaRadius_ = std::isfinite(arenaRadius) ? std::max(0.0F, arenaRadius) : 0.0F;
 }
 
 void ModelRenderer::setShadowBias(float bias) noexcept {

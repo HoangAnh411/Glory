@@ -532,7 +532,7 @@ int main(int argc, char* argv[]) {
     config.arenaCenter = collisionWorld.arenaCenter();
     config.arenaRadius = collisionWorld.arenaRadius();
     for (const auto& box : collisionWorld.obstacles())
-        config.collisionDebugBoxes.push_back({box.minimum, box.maximum});
+        config.collisionDebugBoxes.push_back({box.minimum, box.maximum, box.name});
     glory::game::WorldEncounter worldEncounter = glory::game::WorldEncounter::loadFromFile(config.worldSpawnsPath);
     toWorldEditorData(worldEncounter, config.worldSpawns, config.worldTriggers);
     if (const auto* playerSpawn = worldEncounter.findSpawn(glory::game::SpawnEntityType::Player))
@@ -555,6 +555,7 @@ int main(int argc, char* argv[]) {
         bossConfig.spawnYaw = bossSpawn->yaw;
     }
     glory::game::Boss boss(bossConfig);
+    boss.setCollisionWorld(collisionWorld);
     bool bossEncounterActive = false;
     float bossActivationDelayRemaining = 2.0F;
     glory::game::SkillRegistry skillRegistry = glory::game::SkillRegistry::loadFromFile(config.skillsPath);
@@ -1267,6 +1268,10 @@ int main(int argc, char* argv[]) {
         const glory::game::BossUpdateResult bossResult = bossEncounterActive && bossActivationDelayRemaining <= 0.0F
             ? boss.update(static_cast<float>(fixedDeltaSeconds), state.position, state.isInvulnerable)
             : glory::game::BossUpdateResult{};
+        const auto separation = glory::game::separateCapsules(
+            {state.position, 0.4F, 1.8F}, {boss.position(), boss.hurtbox().radius, boss.hurtbox().height});
+        controller.resolveWorldDisplacement(separation.first);
+        boss.resolveWorldDisplacement(separation.second);
         if (bossResult.playerDamage > 0.0F) {
             playerHealth = std::max(0.0F, playerHealth - bossResult.playerDamage);
             controller.applyKnockback(bossResult.playerKnockback);

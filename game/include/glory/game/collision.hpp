@@ -4,6 +4,7 @@
 #include <glm/vec3.hpp>
 
 #include <filesystem>
+#include <string>
 #include <vector>
 
 namespace glory::game {
@@ -18,6 +19,7 @@ struct Aabb {
     glm::vec3 minimum{0.0F};
     glm::vec3 maximum{0.0F};
     bool step = false;
+    std::string name;
 };
 
 struct Ramp {
@@ -38,6 +40,14 @@ struct CollisionResult {
     bool isGrounded = false;
     unsigned int contactCount = 0;
 };
+
+struct CapsuleSeparation {
+    glm::vec3 first{0.0F};
+    glm::vec3 second{0.0F};
+};
+
+[[nodiscard]] CapsuleSeparation separateCapsules(const Capsule& first, const Capsule& second,
+    float skin = 0.02F) noexcept;
 
 class CollisionWorld {
 public:

@@ -24,6 +24,19 @@ int main() {
             glm::distance(chaseBoss.position(), glm::vec3(0.0F)) < initialDistance,
             "phase one should chase the player when outside melee range");
 
+        CollisionWorld bossWall;
+        bossWall.addObstacle({{1.0F, 0.0F, 7.0F}, {1.4F, 2.5F, 9.0F}, false, "boss wall"});
+        Boss blockedBoss({300.0F, 3.5F, 9.0F, 2.8F, {0.0F, 0.0F, 8.0F}});
+        blockedBoss.setCollisionWorld(bossWall);
+        for (int i = 0; i < 80; ++i) (void)blockedBoss.update(0.1F, {3.0F, 0.0F, 8.0F}, false);
+        require(blockedBoss.position().x <= 0.46F,
+            "boss chase cannot tunnel through the injected world wall");
+
+        Boss spawnBoss({300.0F, 3.5F, 9.0F, 2.8F, {1.2F, 0.0F, 8.0F}});
+        spawnBoss.setCollisionWorld(bossWall);
+        require(spawnBoss.position().x < 0.46F || spawnBoss.position().x >= 1.95F,
+            "boss spawn overlapping a world collider is depenetrated");
+
         Boss slashBoss({300.0F, 3.5F, 9.0F, 2.8F, {0.0F, 0.0F, 2.0F}});
         const BossUpdateResult slash = slashBoss.update(0.016F, glm::vec3(0.0F), false);
         require(slash.attackName == "BossSlash" && std::abs(slash.playerDamage - 20.0F) < 1.0e-5F &&

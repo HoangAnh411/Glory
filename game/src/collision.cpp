@@ -97,6 +97,22 @@ void CollisionWorld::addObstacle(const Aabb& obstacle) {
     obstacles_.push_back(obstacle);
 }
 
+CapsuleSeparation separateCapsules(const Capsule& first, const Capsule& second, float skin) noexcept {
+    CapsuleSeparation result;
+    if (!finite(first.base) || !finite(second.base) || !std::isfinite(first.radius) ||
+        !std::isfinite(second.radius) || first.radius <= 0.0F || second.radius <= 0.0F ||
+        !std::isfinite(skin) || skin < 0.0F) return result;
+    glm::vec2 delta{second.base.x - first.base.x, second.base.z - first.base.z};
+    const float distance = glm::length(delta);
+    const float overlap = first.radius + second.radius + skin - distance;
+    if (overlap <= 0.0F) return result;
+    const glm::vec2 direction = distance > contactEpsilon ? delta / distance : glm::vec2{1.0F, 0.0F};
+    const glm::vec2 correction = direction * (overlap * 0.5F);
+    result.first = {-correction.x, 0.0F, -correction.y};
+    result.second = {correction.x, 0.0F, correction.y};
+    return result;
+}
+
 void CollisionWorld::addStep(Aabb step) {
     if (!finite(step.minimum) || !finite(step.maximum) ||
         step.minimum.x >= step.maximum.x || step.minimum.y >= step.maximum.y ||
@@ -164,7 +180,8 @@ CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldM
                 minZ = std::min(minZ, worldZ); maxZ = std::max(maxZ, worldZ);
             }
             world.addObstacle({{minX, origin.y + localMin.y * scale, minZ},
-                {maxX, origin.y + localMax.y * scale, maxZ}, false});
+                {maxX, origin.y + localMax.y * scale, maxZ}, false,
+                prop.value("type", std::string("world prop"))});
         };
         if (prop.contains("collision")) addLocalBounds(prop["collision"]);
         if (prop.contains("multi_collision") && prop["multi_collision"].is_array())
@@ -175,7 +192,7 @@ CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldM
         const auto& maximum = item.at("maximum");
         world.addObstacle({{minimum[0].get<float>(), minimum[1].get<float>(), minimum[2].get<float>()},
             {maximum[0].get<float>(), maximum[1].get<float>(), maximum[2].get<float>()},
-            item.value("step", false)});
+            item.value("step", false), item.value("name", std::string("authored collider"))});
     }
     return world;
 }

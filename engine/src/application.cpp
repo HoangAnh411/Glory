@@ -211,6 +211,11 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
         }
         ModelRenderer renderer(config.modelPath);
         ModelRenderer bossRenderer(config.bossModelPath);
+        std::vector<CameraCollider> cameraColliders;
+        cameraColliders.reserve(config.collisionDebugBoxes.size());
+        for (const auto& box : config.collisionDebugBoxes)
+            cameraColliders.push_back({box.minimum, box.maximum, box.name});
+        renderer.setCameraColliders(std::move(cameraColliders), config.arenaCenter, config.arenaRadius);
         struct RemoteRenderer {
             std::unique_ptr<ModelRenderer> model;
             std::string animationState;

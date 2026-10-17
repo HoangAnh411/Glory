@@ -89,7 +89,7 @@ Platform (window, input, thời gian)
 - [x] Character controller: chạy, nhảy, camera third-person
 - [x] Né đòn (dodge) với khung bất tử ngắn
 - [x] Va chạm capsule với địa hình
-- World collision upgrade: C1 static collider data/debug complete; C2 player move-and-slide and arena enforcement complete; C3 boss separation and shared camera colliders pending.
+- [x] World collision upgrade: C1 static collider data/debug, C2 player move-and-slide and arena enforcement, C3 boss movement/separation and shared camera colliders complete.
 - [x] Hitbox và hurtbox gắn theo animation
 - [x] Skill data-driven: đọc từ JSON (sát thương, cooldown, cast time)
 - [x] Combo và cửa sổ hủy chiêu (cancel window)

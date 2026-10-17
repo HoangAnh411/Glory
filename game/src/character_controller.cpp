@@ -141,6 +141,18 @@ void CharacterController::applyKnockback(const glm::vec3& velocity) noexcept {
     state_.knockbackRemaining = 0.25F;
 }
 
+void CharacterController::resolveWorldDisplacement(const glm::vec3& displacement) noexcept {
+    if (!collisionEnabled_ || !std::isfinite(displacement.x) || !std::isfinite(displacement.y) ||
+        !std::isfinite(displacement.z)) return;
+    const CollisionResult result = collisionWorld_.resolve(
+        {state_.position, config_.capsuleRadius, config_.capsuleHeight},
+        state_.position + displacement, state_.velocity, config_.maximumStepHeight);
+    state_.position = result.position;
+    state_.velocity = result.velocity;
+    state_.isGrounded = result.isGrounded;
+    state_.collisionCount += result.contactCount;
+}
+
 bool CharacterController::setClassMovement(float moveSpeed, float dodgeCooldown) noexcept {
     if (!std::isfinite(moveSpeed) || moveSpeed <= 0.0F ||
         !std::isfinite(dodgeCooldown) || dodgeCooldown < 0.0F) return false;

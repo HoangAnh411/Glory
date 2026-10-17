@@ -54,6 +54,7 @@ public:
     void addObstacle(const Aabb& obstacle) { collisionWorld_.addObstacle(obstacle); }
     void setCollisionEnabled(bool enabled) noexcept { collisionEnabled_ = enabled; }
     void setCollisionWorld(CollisionWorld world) { collisionWorld_ = std::move(world); }
+    void resolveWorldDisplacement(const glm::vec3& displacement) noexcept;
     [[nodiscard]] CollisionWorld& collisionWorld() noexcept { return collisionWorld_; }
     [[nodiscard]] const CollisionWorld& collisionWorld() const noexcept { return collisionWorld_; }
 

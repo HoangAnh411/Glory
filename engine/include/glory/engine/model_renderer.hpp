@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <vector>
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <functional>
 namespace glory::engine {
@@ -34,6 +35,14 @@ struct StaticWorldProp {
     float yaw = 0.0F;
     float scale = 1.0F;
 };
+struct CameraCollider {
+    glm::vec3 minimum{0.0F};
+    glm::vec3 maximum{0.0F};
+    std::string name;
+};
+[[nodiscard]] float cameraColliderDistance(const glm::vec3& origin, const glm::vec3& desiredPosition,
+    const std::vector<CameraCollider>& colliders, float cameraRadius = 0.2F,
+    std::string* blockerName = nullptr, glm::vec3* blockerPosition = nullptr) noexcept;
 class ModelRenderer {
 public:
     explicit ModelRenderer(const std::filesystem::path& modelPath);
@@ -45,6 +54,8 @@ public:
     void setDeadAppearance(bool dead) noexcept { deadAppearance_ = dead; }
     [[nodiscard]] float cameraObstructionDistance(const glm::vec3& origin,
         const glm::vec3& desiredPosition, float cameraRadius = 0.2F) const noexcept;
+    void setCameraColliders(std::vector<CameraCollider> colliders, glm::vec2 arenaCenter,
+        float arenaRadius);
     [[nodiscard]] const std::string& cameraBlockerName() const noexcept { return cameraBlockerName_; }
     [[nodiscard]] const glm::vec3& cameraBlockerPosition() const noexcept { return cameraBlockerPosition_; }
     [[nodiscard]] float lastCameraObstructionDistance() const noexcept { return lastCameraObstructionDistance_; }
@@ -140,5 +151,8 @@ private:
     mutable std::string cameraBlockerName_ = "none";
     mutable glm::vec3 cameraBlockerPosition_{0.0F};
     mutable float lastCameraObstructionDistance_ = 0.0F;
+    std::vector<CameraCollider> cameraColliders_;
+    glm::vec2 cameraArenaCenter_{0.0F};
+    float cameraArenaRadius_ = 0.0F;
 };
 }
