@@ -549,6 +549,7 @@ float cameraColliderDistance(const glm::vec3& origin, const glm::vec3& desiredPo
     if (blockerName) *blockerName = "none";
     if (blockerPosition) *blockerPosition = origin;
     for (const CameraCollider& collider : colliders) {
+        if (!collider.blocksMovement) continue;
         const glm::vec3 size = collider.maximum - collider.minimum;
         if (std::max({size.x, size.y, size.z}) < 1.2F) continue;
         const glm::vec3 boundsMin = collider.minimum - glm::vec3(cameraRadius);

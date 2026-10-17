@@ -159,6 +159,8 @@ CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldM
     Json worldMap;
     worldFile >> worldMap;
     const float pi = std::acos(-1.0F);
+    const auto nonBlockingTypes = colliderData.value("nonBlockingTypes", std::vector<std::string>{});
+    const auto colliderOverrides = colliderData.value("colliderOverrides", Json::object());
     std::size_t propIndex = 0;
     for (const auto& prop : worldMap.value("props", Json::array())) {
         const std::size_t currentPropIndex = propIndex++;
@@ -167,7 +169,8 @@ CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldM
         const glm::vec3 origin{position[0].get<float>(), position[1].get<float>(), position[2].get<float>()};
         const float yaw = prop.value("yaw", 0.0F) * pi / 180.0F;
         const float scale = std::abs(prop.value("scale", 1.0F));
-        const auto addLocalBounds = [&](const Json& bounds) {
+        const std::string propType = prop.value("type", std::string("world prop"));
+        const auto addLocalBounds = [&](const Json& bounds, bool blocksMovement) {
             if (!bounds.is_array() || bounds.size() < 6) return;
             const glm::vec3 localMin{bounds[0].get<float>(), bounds[1].get<float>(), bounds[2].get<float>()};
             const glm::vec3 localMax{bounds[3].get<float>(), bounds[4].get<float>(), bounds[5].get<float>()};
@@ -185,11 +188,18 @@ CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldM
             }
             world.addObstacle({{minX, origin.y + localMin.y * scale, minZ},
                 {maxX, origin.y + localMax.y * scale, maxZ}, false,
-                prop.value("type", std::string("world prop")) + "#" + std::to_string(currentPropIndex)});
+                propType + "#" + std::to_string(currentPropIndex), blocksMovement});
         };
-        if (prop.contains("collision")) addLocalBounds(prop["collision"]);
+        const bool blocksMovement = std::find(nonBlockingTypes.begin(), nonBlockingTypes.end(), propType) ==
+            nonBlockingTypes.end();
+        const auto override = colliderOverrides.find(propType);
+        if (override != colliderOverrides.end() && override->contains("bounds")) {
+            addLocalBounds((*override)["bounds"], override->value("blocksMovement", blocksMovement));
+        } else if (prop.contains("collision")) {
+            addLocalBounds(prop["collision"], blocksMovement);
+        }
         if (prop.contains("multi_collision") && prop["multi_collision"].is_array())
-            for (const auto& bounds : prop["multi_collision"]) addLocalBounds(bounds);
+            for (const auto& bounds : prop["multi_collision"]) addLocalBounds(bounds, blocksMovement);
     }
     for (const auto& item : colliderData.value("obstacles", Json::array())) {
         const auto& minimum = item.at("minimum");
@@ -249,6 +259,7 @@ CollisionResult CollisionWorld::resolve(const Capsule& capsule, const glm::vec3&
         }
 
         for (const Aabb& obstacle : obstacles_) {
+            if (!obstacle.blocksMovement) continue;
             if (!overlapsCircleXZ(candidate, capsule.radius, obstacle)) continue;
 
             if (std::abs(candidate.y - obstacle.maximum.y) <= contactEpsilon) {
@@ -302,6 +313,7 @@ CollisionResult CollisionWorld::resolve(const Capsule& capsule, const glm::vec3&
             const Aabb* deepest = nullptr;
             float maximumPenetration = 0.0F;
             for (const Aabb& obstacle : obstacles_) {
+                if (!obstacle.blocksMovement) continue;
                 if (!overlapsVertically(capsule, candidate, obstacle) ||
                     !overlapsCircleXZ(candidate, capsule.radius, obstacle)) continue;
                 const float closestX = std::clamp(candidate.x, obstacle.minimum.x, obstacle.maximum.x);

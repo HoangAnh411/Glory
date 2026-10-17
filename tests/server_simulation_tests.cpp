@@ -29,7 +29,7 @@ int main() {
             "server simulation should accumulate exactly 120 fixed ticks / 2 seconds");
 
         server::ServerSimulation collisionSimulation(dataPath("world_spawns.json"), dataPath("skills.json"));
-        collisionSimulation.player().teleport({19.0F, 0.0F, 0.0F}, 0.0F);
+        collisionSimulation.player().teleport({20.0F, 0.0F, 3.0F}, 0.0F);
         input::InputFrame moveRight;
         moveRight.held.push_back(input::Control::KeyW);
         bool collisionObserved = false;
@@ -37,8 +37,8 @@ int main() {
             collisionSimulation.tick(moveRight, 0.0F);
             collisionObserved = collisionObserved || collisionSimulation.player().state().collisionCount > 0;
         }
-        require(collisionObserved && collisionSimulation.player().state().position.x < 20.1F,
-            "headless server character movement should resolve sample world collision");
+        require(collisionObserved && collisionSimulation.player().state().position.x < 21.6F,
+            "headless server character movement should resolve the authored farm fence collision");
 
         server::ServerSimulation combatSimulation(dataPath("world_spawns.json"), dataPath("skills.json"));
         combatSimulation.boss().setSpawnTransform({-1.15F, 0.0F, 0.0F}, 0.0F);

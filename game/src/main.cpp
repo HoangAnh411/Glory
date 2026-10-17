@@ -580,7 +580,7 @@ int main(int argc, char* argv[]) {
     config.arenaCenter = collisionWorld.arenaCenter();
     config.arenaRadius = collisionWorld.arenaRadius();
     for (const auto& box : collisionWorld.obstacles())
-        config.collisionDebugBoxes.push_back({box.minimum, box.maximum, box.name});
+        config.collisionDebugBoxes.push_back({box.minimum, box.maximum, box.name, box.blocksMovement});
     glory::game::WorldEncounter worldEncounter = glory::game::WorldEncounter::loadFromFile(config.worldSpawnsPath);
     toWorldEditorData(worldEncounter, config.worldSpawns, config.worldTriggers);
     if (const auto* playerSpawn = worldEncounter.findSpawn(glory::game::SpawnEntityType::Player))
@@ -1425,7 +1425,8 @@ int main(int argc, char* argv[]) {
                                 for (const auto& box : collisionWorld.obstacles()) {
                                     const float x = std::clamp(position.x, box.minimum.x, box.maximum.x);
                                     const float z = std::clamp(position.z, box.minimum.z, box.maximum.z);
-                                    if (glm::length(glm::vec2{position.x - x, position.z - z}) < capsule.radius + 0.05F &&
+                                    if (box.blocksMovement &&
+                                        glm::length(glm::vec2{position.x - x, position.z - z}) < capsule.radius + 0.05F &&
                                         position.y < box.maximum.y && position.y + capsule.height > box.minimum.y) {
                                         blocker = box.name;
                                         break;
@@ -1488,10 +1489,13 @@ int main(int argc, char* argv[]) {
             for (const auto& box : collisionWorld.obstacles()) {
                 const auto a = worldPixel({box.minimum.x, 0.0F, box.minimum.z});
                 const auto b = worldPixel({box.maximum.x, 0.0F, box.maximum.z});
-                line({a.x, a.y}, {b.x, a.y}, {80, 190, 100});
-                line({b.x, a.y}, {b.x, b.y}, {80, 190, 100});
-                line({b.x, b.y}, {a.x, b.y}, {80, 190, 100});
-                line({a.x, b.y}, {a.x, a.y}, {80, 190, 100});
+                const std::array<std::uint8_t, 3> color = box.blocksMovement
+                    ? std::array<std::uint8_t, 3>{80, 190, 100}
+                    : std::array<std::uint8_t, 3>{70, 130, 240};
+                line({a.x, a.y}, {b.x, a.y}, color);
+                line({b.x, a.y}, {b.x, b.y}, color);
+                line({b.x, b.y}, {a.x, b.y}, color);
+                line({a.x, b.y}, {a.x, a.y}, color);
             }
             for (std::size_t i = 1; i < playerTrail.size(); ++i)
                 line(worldPixel(playerTrail[i - 1]), worldPixel(playerTrail[i]), {40, 190, 255});

@@ -45,6 +45,7 @@ struct CameraCollider {
     glm::vec3 minimum{0.0F};
     glm::vec3 maximum{0.0F};
     std::string name;
+    bool blocksMovement = true;
 };
 [[nodiscard]] float cameraColliderDistance(const glm::vec3& origin, const glm::vec3& desiredPosition,
     const std::vector<CameraCollider>& colliders, float cameraRadius = 0.2F,

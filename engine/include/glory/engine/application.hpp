@@ -357,6 +357,7 @@ struct ApplicationConfig {
         glm::vec3 minimum{0.0F};
         glm::vec3 maximum{0.0F};
         std::string name;
+        bool blocksMovement = true;
     };
     std::vector<CollisionDebugBox> collisionDebugBoxes;
     glm::vec2 arenaCenter{0.0F};

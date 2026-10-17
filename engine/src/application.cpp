@@ -214,17 +214,19 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
         std::vector<CameraCollider> cameraColliders;
         cameraColliders.reserve(config.collisionDebugBoxes.size());
         for (const auto& box : config.collisionDebugBoxes)
-            cameraColliders.push_back({box.minimum, box.maximum, box.name});
+            cameraColliders.push_back({box.minimum, box.maximum, box.name, box.blocksMovement});
         renderer.setCameraColliders(std::move(cameraColliders), config.arenaCenter, config.arenaRadius);
         std::cout << "[collision-bounds] rendered static prop AABBs versus loaded collision AABBs (m)\n";
         for (const auto& rendered : renderer.renderedWorldPropBounds()) {
             glm::vec3 colliderMin(std::numeric_limits<float>::max());
             glm::vec3 colliderMax(std::numeric_limits<float>::lowest());
             bool foundCollider = false;
+            bool blocksMovement = true;
             for (const auto& box : config.collisionDebugBoxes) {
                 if (box.name != rendered.name) continue;
                 colliderMin = glm::min(colliderMin, box.minimum);
                 colliderMax = glm::max(colliderMax, box.maximum);
+                blocksMovement = blocksMovement && box.blocksMovement;
                 foundCollider = true;
             }
             if (!foundCollider) {
@@ -236,7 +238,10 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             const glm::vec3 error = glm::max(glm::abs(rendered.minimum - colliderMin),
                 glm::abs(rendered.maximum - colliderMax));
             const float maxError = std::max({error.x, error.y, error.z});
-            std::cout << "[collision-bounds] " << (maxError > 0.15F ? "MISMATCH " : "OK ")
+            const bool treeTrunk = rendered.name.starts_with("tree_");
+            const char* status = !blocksMovement ? "NON-BLOCKING " :
+                (treeTrunk ? "AUTHORED-TRUNK " : (maxError > 0.15F ? "MISMATCH " : "OK "));
+            std::cout << "[collision-bounds] " << status
                       << rendered.name << " render=[" << rendered.minimum.x << ',' << rendered.minimum.y << ','
                       << rendered.minimum.z << ';' << rendered.maximum.x << ',' << rendered.maximum.y << ','
                       << rendered.maximum.z << "] collider=[" << colliderMin.x << ',' << colliderMin.y << ','

@@ -101,6 +101,7 @@ void testWorldColliderData() {
     const CollisionResult depenetrated = world.resolve(bossCapsule, bossCornerPosition, {});
     bool overlapsObstacle = false;
     for (const Aabb& box : world.obstacles()) {
+        if (!box.blocksMovement) continue;
         if (depenetrated.position.y >= box.maximum.y ||
             depenetrated.position.y + bossCapsule.height <= box.minimum.y) continue;
         const float closestX = std::clamp(depenetrated.position.x, box.minimum.x, box.maximum.x);
@@ -111,6 +112,41 @@ void testWorldColliderData() {
     }
     expect(!overlapsObstacle,
         "boss capsule is depenetrated from consecutive world boxes at the live walk-test failure point");
+
+    const auto hasType = [&](const std::string& prefix, bool blocksMovement) {
+        return std::any_of(world.obstacles().begin(), world.obstacles().end(), [&](const Aabb& box) {
+            return box.name.starts_with(prefix) && box.blocksMovement == blocksMovement;
+        });
+    };
+    expect(hasType("bush_flower_cluster#", false), "bush bounds are loaded for debug but do not block movement");
+    expect(hasType("terrain_hill_green#", false) && hasType("terrain_cliff_rock#", false),
+        "large decorative terrain bounds do not block movement");
+    expect(hasType("bench_wooden#", true) && hasType("fence_farm_wood#", true),
+        "solid benches and fences remain movement blockers");
+    const auto tree = std::find_if(world.obstacles().begin(), world.obstacles().end(), [](const Aabb& box) {
+        return box.name.starts_with("tree_village_oak#");
+    });
+    expect(tree != world.obstacles().end() && tree->blocksMovement &&
+        tree->maximum.x - tree->minimum.x <= 1.5F && tree->maximum.z - tree->minimum.z <= 1.5F,
+        "tree collision uses a narrow trunk footprint instead of canopy bounds");
+}
+
+void testNonBlockingDecorationAndBlockingTrunk() {
+    using namespace glory::game;
+    CollisionWorld world;
+    world.addObstacle({{1.0F, 0.0F, -1.0F}, {3.0F, 5.0F, 1.0F}, false,
+        "decorative canopy", false});
+    world.addObstacle({{4.0F, 0.0F, -0.35F}, {4.7F, 3.5F, 0.35F}, false,
+        "tree trunk", true});
+
+    const CollisionResult throughDecoration = world.resolve(capsuleAt({0.0F, 0.0F, 0.0F}),
+        {3.5F, 0.0F, 0.0F}, {3.5F, 0.0F, 0.0F});
+    expect(nearlyEqual(throughDecoration.position.x, 3.5F) && throughDecoration.contactCount == 0,
+        "capsule passes through a non-blocking decorative bound");
+    const CollisionResult atTrunk = world.resolve(capsuleAt({3.0F, 0.0F, 0.0F}),
+        {5.0F, 0.0F, 0.0F}, {2.0F, 0.0F, 0.0F});
+    expect(atTrunk.position.x < 4.0F && atTrunk.contactCount > 0,
+        "capsule remains blocked by the narrow tree trunk collider");
 }
 
 void testCapsuleActorSeparation() {
@@ -184,6 +220,7 @@ int main() {
     testWalkableAndSteepSlopes();
     testStepUpAndSampleTerrain();
     testWorldColliderData();
+    testNonBlockingDecorationAndBlockingTrunk();
     testCapsuleActorSeparation();
     testFrameRateIndependentWallBlocking();
     testCornerStabilityAndArenaBoundary();

@@ -20,6 +20,7 @@ struct Aabb {
     glm::vec3 maximum{0.0F};
     bool step = false;
     std::string name;
+    bool blocksMovement = true;
 };
 
 struct Ramp {

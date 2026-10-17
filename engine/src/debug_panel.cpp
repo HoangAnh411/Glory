@@ -731,6 +731,9 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     ImGui::Checkbox("Noclip (debug)", &noclipEnabled);
                     ImGui::Text("World AABBs: %d | Arena radius: %.1f m",
                         static_cast<int>(collisionDebugBoxes_.size()), collisionArenaRadius_);
+                    ImGui::TextColored(ImVec4(0.25F, 1.0F, 0.5F, 1.0F), "Green: blocks movement");
+                    ImGui::SameLine();
+                    ImGui::TextColored(ImVec4(0.3F, 0.65F, 1.0F, 1.0F), "Blue: debug bounds only");
                     ImGui::Text("Position: %.2f, %.2f, %.2f | Velocity: %.2f, %.2f, %.2f",
                         player.position.x, player.position.y, player.position.z,
                         player.velocity.x, player.velocity.y, player.velocity.z);
@@ -1239,7 +1242,7 @@ void DebugPanel::render() {
             const float closestZ = std::clamp(collisionPlayerPosition_.z, box.minimum.z, box.maximum.z);
             const float dx = collisionPlayerPosition_.x - closestX;
             const float dz = collisionPlayerPosition_.z - closestZ;
-            touching = dx * dx + dz * dz <= 0.42F * 0.42F &&
+            touching = box.blocksMovement && dx * dx + dz * dz <= 0.42F * 0.42F &&
                 collisionPlayerPosition_.y < box.maximum.y && collisionPlayerPosition_.y + 1.8F > box.minimum.y;
             for (int index = 0; index < 8; ++index) {
                 corners[index] = {(index & 1) ? box.maximum.x : box.minimum.x,
@@ -1247,7 +1250,8 @@ void DebugPanel::render() {
                     (index & 4) ? box.maximum.z : box.minimum.z};
                 visible[index] = project(corners[index], screen[index]);
             }
-            const ImU32 color = touching ? IM_COL32(255, 64, 48, 255) : IM_COL32(64, 255, 128, 220);
+            const ImU32 color = touching ? IM_COL32(255, 64, 48, 255) :
+                (box.blocksMovement ? IM_COL32(64, 255, 128, 220) : IM_COL32(80, 160, 255, 180));
             for (const auto& edge : edgeCorners)
                 if (visible[edge[0]] && visible[edge[1]])
                     draw->AddLine(screen[edge[0]], screen[edge[1]], color, 1.5F);
