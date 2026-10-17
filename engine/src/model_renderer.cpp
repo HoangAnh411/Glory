@@ -110,6 +110,7 @@ uniform bool u_ShadowEnabled;
 uniform bool u_UseTexture;
 uniform bool u_EncodeSrgb;
 uniform vec3 u_EmissiveFactor;
+uniform float u_Opacity;
 uniform bool u_CharacterLighting;
 uniform bool u_FogEnabled;
 uniform bool u_HemisphereEnabled;
@@ -281,7 +282,7 @@ void main(){
     else if(u_LightingDebugView==8 && invalidValue) finalColor=vec3(1.0,0.0,1.0);
     if(invalidValue && u_LightingDebugView==8) finalColor=vec3(1.0,0.0,1.0);
     if(u_EncodeSrgb) finalColor=linearToSrgb(finalColor);
-    fragmentColor=vec4(finalColor,baseSample.a);
+    fragmentColor=vec4(finalColor,baseSample.a*u_Opacity);
 }
 )glsl";
 
@@ -472,12 +473,27 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
             shader_.setPbrMaterial(it->second->metallicFactor(), it->second->roughnessFactor(), it->second->ambientOcclusion());
             shader_.setEmissiveFactor(it->second->emissiveFactor());
             it->second->bindTexture(0);
+            const bool fadeForCamera = prop.type == cameraBlockerName_ &&
+                glm::length(prop.position - cameraBlockerPosition_) < 0.01F;
+            const GLint opacityLocation = gl_.getUniformLocation(shader_.program(), "u_Opacity");
+            if (opacityLocation >= 0) gl_.uniform1f(opacityLocation, fadeForCamera ? 0.28F : 1.0F);
+            if (fadeForCamera) {
+                gl_.enable(GL_BLEND);
+                gl_.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                gl_.depthMask(GL_FALSE);
+            }
             it->second->draw();
+            if (fadeForCamera) {
+                gl_.depthMask(GL_TRUE);
+                gl_.disable(GL_BLEND);
+            }
         }
     }
 
+    const GLint opacityLocation = gl_.getUniformLocation(shader_.program(), "u_Opacity");
+    if (opacityLocation >= 0) gl_.uniform1f(opacityLocation, 1.0F);
     shader_.useTexture(true);
-    shader_.setBaseColorFactor(model_.baseColorFactor());
+    shader_.setBaseColorFactor(model_.baseColorFactor() * (deadAppearance_ ? 0.28F : 1.0F));
     shader_.setEmissiveFactor(model_.emissiveFactor());
     shader_.setPbrMaterial(metallic_, roughness_, ambientOcclusion_);
     shader_.setSkinPalette(palette, model_.hasSkin());
@@ -527,6 +543,7 @@ float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
     const glm::vec3 direction = segment / segmentLength;
     float allowedDistance = segmentLength;
     cameraBlockerName_ = "none";
+    cameraBlockerPosition_ = origin;
     for (const StaticWorldProp& prop : staticProps_) {
         const auto model = propModelTemplates_.find(prop.type);
         if (model == propModelTemplates_.end() || !model->second) continue;
@@ -560,6 +577,7 @@ float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
         if (hit && entry >= 0.0F && entry < allowedDistance) {
             allowedDistance = entry;
             cameraBlockerName_ = prop.type;
+            cameraBlockerPosition_ = prop.position;
         }
     }
 
@@ -579,6 +597,7 @@ float ModelRenderer::cameraObstructionDistance(const glm::vec3& origin,
             if (boundaryDistance < allowedDistance) {
                 allowedDistance = boundaryDistance;
                 cameraBlockerName_ = "arena perimeter";
+                cameraBlockerPosition_ = glm::vec3(end.x, origin.y, end.y);
             }
         }
     }

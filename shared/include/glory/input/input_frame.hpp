@@ -27,6 +27,7 @@ enum class Control {
     Key2,
     Key3,
     Key4,
+    KeyR,
     KeyTab,
     MouseLeft,
     MouseMiddle,
@@ -39,6 +40,7 @@ struct InputFrame {
     std::vector<Control> released;
     float mouseDeltaX = 0.0F;
     float mouseDeltaY = 0.0F;
+    float mouseWheelY = 0.0F;
 };
 
 } // namespace glory::input

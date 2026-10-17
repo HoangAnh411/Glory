@@ -138,10 +138,26 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     FixedTimestep timestep;
     InputSystem inputSystem;
     FreeCamera camera;
-    ThirdPersonCamera thirdPersonCamera;
+    ThirdPersonCameraConfig orbitCameraConfig;
+    const std::filesystem::path cameraSettingsPath = "settings/camera.json";
+    try {
+        if (std::filesystem::exists(cameraSettingsPath)) {
+            std::ifstream settingsFile(cameraSettingsPath);
+            const nlohmann::json settings = nlohmann::json::parse(settingsFile);
+            orbitCameraConfig.distance = settings.value("distance", orbitCameraConfig.distance);
+            orbitCameraConfig.fieldOfViewDegrees = settings.value("fov", orbitCameraConfig.fieldOfViewDegrees);
+            orbitCameraConfig.shoulderOffset = settings.value("shoulder", orbitCameraConfig.shoulderOffset);
+            orbitCameraConfig.mouseSensitivity = settings.value("mouse_sensitivity", orbitCameraConfig.mouseSensitivity);
+            orbitCameraConfig.invertMouseY = settings.value("invert_mouse_y", orbitCameraConfig.invertMouseY);
+        }
+    } catch (const std::exception& error) {
+        std::cerr << "Ignoring invalid camera settings: " << error.what() << '\n';
+    }
+    ThirdPersonCamera thirdPersonCamera(orbitCameraConfig);
     ThirdPersonCameraConfig legacyCameraConfig;
     legacyCameraConfig.distance = 4.5F;
     legacyCameraConfig.shoulderOffset = 0.0F;
+    legacyCameraConfig.framingOffset = 0.0F;
     legacyCameraConfig.targetOffset = {0.0F, 1.2F, 0.0F};
     legacyCameraConfig.fieldOfViewDegrees = 45.0F;
     ThirdPersonCamera legacyThirdPersonCamera(legacyCameraConfig);
@@ -149,6 +165,10 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     PlayerFrameState player;
     bool thirdPersonMode = true;
     bool enhancedCamera = true;
+    bool windowFocused = true;
+    bool cursorReleasedByEscape = false;
+    bool relativeMouseActive = false;
+    bool ignoreNextMouseFrame = true;
     bool targetLockActive = false;
     bool attackActive = false;
     bool resetBossRequested = false;
@@ -207,15 +227,25 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             while (SDL_PollEvent(&event)) {
                 debugPanel.processEvent(event);
                 inputSystem.processEvent(event);
-                if (event.type == SDL_EVENT_QUIT ||
-                    event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
-                    (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)) {
+                if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) windowFocused = false;
+                if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) windowFocused = true;
+                if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) cursorReleasedByEscape = false;
+                if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
                     running = false;
                 }
+                if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)
+                    cursorReleasedByEscape = true;
             }
 
-            const bool captureMouse = config.smokeTestTickLimit == 0 && !debugPanel.wantsCaptureMouse();
-            (void)SDL_SetWindowRelativeMouseMode(window, captureMouse);
+            const bool altHeld = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
+            const bool captureMouse = config.smokeTestTickLimit == 0 && windowFocused && !altHeld &&
+                !cursorReleasedByEscape && !debugPanel.isDevToolsVisible() && !debugPanel.isFeedbackOpen();
+            if (captureMouse != relativeMouseActive) {
+                (void)SDL_SetWindowRelativeMouseMode(window, captureMouse);
+                relativeMouseActive = captureMouse;
+                ignoreNextMouseFrame = true;
+                inputSystem.discardMouseDelta();
+            }
 
             const std::uint64_t currentCounter = SDL_GetPerformanceCounter();
             const double frameSeconds = static_cast<double>(currentCounter - previousCounter) /
@@ -231,6 +261,11 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 const input::InputFrame inputFrame = inputSystem.consumeFrame();
                 animationFrozenThisFrame = animationFrozenThisFrame || player.hitStopActive;
                 input::InputFrame gameplayInput = inputFrame;
+                if (ignoreNextMouseFrame) {
+                    gameplayInput.mouseDeltaX = 0.0F;
+                    gameplayInput.mouseDeltaY = 0.0F;
+                    ignoreNextMouseFrame = false;
+                }
                 if (debugPanel.wantsCaptureKeyboard()) {
                     gameplayInput.held.clear();
                     gameplayInput.pressed.clear();
@@ -252,8 +287,11 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 thirdPersonCamera.setLocked(targetLockActive, player.bossPosition);
                 legacyThirdPersonCamera.setLocked(targetLockActive, player.bossPosition);
                 if (thirdPersonMode) {
-                    thirdPersonCamera.update(player.position, gameplayInput.mouseDeltaX, gameplayInput.mouseDeltaY);
-                    legacyThirdPersonCamera.update(player.position, gameplayInput.mouseDeltaX, gameplayInput.mouseDeltaY);
+                    if (enhancedCamera) thirdPersonCamera.zoomBy(gameplayInput.mouseWheelY);
+                    thirdPersonCamera.update(player.position, gameplayInput.mouseDeltaX, gameplayInput.mouseDeltaY,
+                        static_cast<float>(fixedDeltaSeconds));
+                    legacyThirdPersonCamera.update(player.position, gameplayInput.mouseDeltaX, gameplayInput.mouseDeltaY,
+                        static_cast<float>(fixedDeltaSeconds));
                 } else {
                     camera.update(gameplayInput, fixedDeltaSeconds);
                 }
@@ -354,6 +392,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             const glm::mat4 view = thirdPersonMode ? activeThirdPersonCamera.viewMatrix() : camera.viewMatrix();
             const glm::mat4 projection = thirdPersonMode ? activeThirdPersonCamera.projectionMatrix() : camera.projectionMatrix();
             debugPanel.setViewProjection(projection * view);
+            debugPanel.setCameraMarkerVisible(config.captureMode || debugPanel.isDevToolsVisible());
 
             CameraDebugMetrics cameraMetrics;
             cameraMetrics.position = cameraPosition;
@@ -363,22 +402,64 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 std::sin(activePitchRadians), std::sin(activeYawRadians) * std::cos(activePitchRadians)};
             cameraMetrics.lookAt = thirdPersonMode ? activeThirdPersonCamera.targetPosition() :
                 cameraPosition + freeCameraForward;
+            cameraMetrics.playerPivot = player.position + glm::vec3(0.0F, 1.4F, 0.0F);
             cameraMetrics.desiredArmLength = thirdPersonMode ? activeThirdPersonCamera.distance() : 0.0F;
             cameraMetrics.actualArmLength = glm::length(cameraPosition - cameraMetrics.lookAt);
             cameraMetrics.appliedShoulderOffset = thirdPersonMode && enhancedCamera ?
                 activeThirdPersonCamera.shoulderOffset() : 0.0F;
+            cameraMetrics.compositionOffset = thirdPersonMode && enhancedCamera ?
+                activeThirdPersonCamera.framingOffset() : 0.0F;
             cameraMetrics.springArmLateralSlide = 0.0F;
             cameraMetrics.blockingCollider = renderer.cameraBlockerName();
             cameraMetrics.targetLockActive = targetLockActive;
-            const glm::vec4 playerClip = projection * view * glm::vec4(player.position + glm::vec3(0.0F, 1.0F, 0.0F), 1.0F);
-            if (std::isfinite(playerClip.w) && std::abs(playerClip.w) > 1.0e-6F)
-                cameraMetrics.playerNdc = glm::vec2(playerClip) / playerClip.w;
+            const auto [boundsMin, boundsMax] = renderer.localBounds();
+            const glm::mat4 playerTransform = glm::translate(glm::mat4(1.0F), player.position) *
+                glm::rotate(glm::mat4(1.0F), glm::radians(player.facingYaw), glm::vec3(0.0F, 1.0F, 0.0F));
+            const glm::mat4 playerViewProjection = projection * view * playerTransform;
+            cameraMetrics.playerNdcMinimum = glm::vec2(std::numeric_limits<float>::max());
+            cameraMetrics.playerNdcMaximum = glm::vec2(std::numeric_limits<float>::lowest());
+            for (int corner = 0; corner < 8; ++corner) {
+                const glm::vec3 localPoint{
+                    (corner & 1) ? boundsMax.x : boundsMin.x,
+                    (corner & 2) ? boundsMax.y : boundsMin.y,
+                    (corner & 4) ? boundsMax.z : boundsMin.z};
+                const glm::vec4 clip = playerViewProjection * glm::vec4(localPoint, 1.0F);
+                if (!std::isfinite(clip.w) || clip.w <= 1.0e-6F) continue;
+                const glm::vec2 ndc = glm::vec2(clip) / clip.w;
+                cameraMetrics.playerNdcMinimum = glm::min(cameraMetrics.playerNdcMinimum, ndc);
+                cameraMetrics.playerNdcMaximum = glm::max(cameraMetrics.playerNdcMaximum, ndc);
+            }
+            if (cameraMetrics.playerNdcMinimum.x <= cameraMetrics.playerNdcMaximum.x)
+                cameraMetrics.playerNdc = (cameraMetrics.playerNdcMinimum + cameraMetrics.playerNdcMaximum) * 0.5F;
+            const glm::vec4 pivotClip = projection * view * glm::vec4(cameraMetrics.playerPivot, 1.0F);
+            if (std::isfinite(pivotClip.w) && pivotClip.w > 1.0e-6F)
+                cameraMetrics.pivotNdc = glm::vec2(pivotClip) / pivotClip.w;
+            const auto [bossBoundsMin, bossBoundsMax] = bossRenderer.localBounds();
+            const glm::mat4 bossTransform = glm::translate(glm::mat4(1.0F), player.bossPosition) *
+                glm::rotate(glm::mat4(1.0F), glm::radians(player.bossYaw), glm::vec3(0.0F, 1.0F, 0.0F)) *
+                glm::scale(glm::mat4(1.0F), glm::vec3(1.8F));
+            const glm::mat4 bossViewProjection = projection * view * bossTransform;
+            cameraMetrics.bossNdcMinimum = glm::vec2(std::numeric_limits<float>::max());
+            cameraMetrics.bossNdcMaximum = glm::vec2(std::numeric_limits<float>::lowest());
+            for (int corner = 0; corner < 8; ++corner) {
+                const glm::vec3 localPoint{
+                    (corner & 1) ? bossBoundsMax.x : bossBoundsMin.x,
+                    (corner & 2) ? bossBoundsMax.y : bossBoundsMin.y,
+                    (corner & 4) ? bossBoundsMax.z : bossBoundsMin.z};
+                const glm::vec4 clip = bossViewProjection * glm::vec4(localPoint, 1.0F);
+                if (!std::isfinite(clip.w) || clip.w <= 1.0e-6F) continue;
+                const glm::vec2 ndc = glm::vec2(clip) / clip.w;
+                cameraMetrics.bossNdcMinimum = glm::min(cameraMetrics.bossNdcMinimum, ndc);
+                cameraMetrics.bossNdcMaximum = glm::max(cameraMetrics.bossNdcMaximum, ndc);
+            }
             cameraMetrics.playerAlive = player.playerHp > 0.0F;
 
             renderer.setTransform(player.position, player.facingYaw);
+            renderer.setDeadAppearance(player.playerDead);
             if (!animationFrozenThisFrame) renderer.updateAnimation(static_cast<float>(frameSeconds));
             debugPanel.beginFrame(static_cast<float>(frameSeconds), completedTicks, cameraPosition,
-                cameraYaw, cameraPitch, cameraMetrics, thirdPersonMode, enhancedCamera, renderPipeline,
+                cameraYaw, cameraPitch, cameraMetrics, thirdPersonMode, enhancedCamera, thirdPersonCamera,
+                renderPipeline,
                 player, resetBossRequested,
                 requestedSkillId,
                 statusCommand,
@@ -445,9 +526,15 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                     {"look_at", {cameraMetrics.lookAt.x, cameraMetrics.lookAt.y, cameraMetrics.lookAt.z}},
                     {"desired_arm_m", cameraMetrics.desiredArmLength}, {"actual_arm_m", cameraMetrics.actualArmLength},
                     {"applied_shoulder_offset_m", cameraMetrics.appliedShoulderOffset},
+                    {"composition_offset_m", cameraMetrics.compositionOffset},
                     {"spring_arm_lateral_slide_m", cameraMetrics.springArmLateralSlide},
                     {"blocking_collider", cameraMetrics.blockingCollider}, {"target_lock", cameraMetrics.targetLockActive},
                     {"player_ndc", {cameraMetrics.playerNdc.x, cameraMetrics.playerNdc.y}},
+                    {"pivot_ndc", {cameraMetrics.pivotNdc.x, cameraMetrics.pivotNdc.y}},
+                    {"player_ndc_bounds", {{cameraMetrics.playerNdcMinimum.x, cameraMetrics.playerNdcMinimum.y},
+                        {cameraMetrics.playerNdcMaximum.x, cameraMetrics.playerNdcMaximum.y}}},
+                    {"boss_ndc_bounds", {{cameraMetrics.bossNdcMinimum.x, cameraMetrics.bossNdcMinimum.y},
+                        {cameraMetrics.bossNdcMaximum.x, cameraMetrics.bossNdcMaximum.y}}},
                     {"player_state", cameraMetrics.playerAlive ? "alive" : "dead"},
                     {"player_position", {player.position.x, player.position.y, player.position.z}},
                     {"boss_position", {player.bossPosition.x, player.bossPosition.y, player.bossPosition.z}},

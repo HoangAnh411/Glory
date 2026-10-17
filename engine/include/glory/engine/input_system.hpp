@@ -10,6 +10,7 @@ class InputSystem {
 public:
     void processEvent(const SDL_Event& event);
     [[nodiscard]] input::InputFrame consumeFrame();
+    void discardMouseDelta() noexcept;
 
 private:
     input::InputFrame pendingFrame_;

@@ -4,6 +4,7 @@
 #include "glory/engine/animation.hpp"
 #include "glory/engine/application.hpp"
 #include "glory/engine/render_pipeline.hpp"
+#include "glory/engine/third_person_camera.hpp"
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
@@ -42,13 +43,20 @@ struct GameHudCalculations {
 struct CameraDebugMetrics {
     glm::vec3 position{0.0F};
     glm::vec3 lookAt{0.0F};
+    glm::vec3 playerPivot{0.0F};
     float desiredArmLength = 0.0F;
     float actualArmLength = 0.0F;
     float appliedShoulderOffset = 0.0F;
+    float compositionOffset = 0.0F;
     float springArmLateralSlide = 0.0F;
     std::string blockingCollider = "none";
     bool targetLockActive = false;
     glm::vec2 playerNdc{0.0F};
+    glm::vec2 playerNdcMinimum{0.0F};
+    glm::vec2 playerNdcMaximum{0.0F};
+    glm::vec2 pivotNdc{0.0F};
+    glm::vec2 bossNdcMinimum{0.0F};
+    glm::vec2 bossNdcMaximum{0.0F};
     bool playerAlive = true;
 };
 
@@ -64,10 +72,12 @@ public:
     [[nodiscard]] bool wantsCaptureKeyboard() const noexcept;
     [[nodiscard]] bool isDevToolsVisible() const noexcept { return devToolsVisible_; }
     void setDevToolsVisible(bool visible) noexcept { devToolsVisible_ = visible; }
+    void setCameraMarkerVisible(bool visible) noexcept { cameraMarkerVisible_ = visible; }
     [[nodiscard]] bool isFeedbackOpen() const noexcept { return feedbackOpenRequested_; }
     void beginFrame(float frameSeconds, std::uint64_t fixedTicks, const glm::vec3& cameraPosition,
         float cameraYaw, float cameraPitch, const CameraDebugMetrics& cameraMetrics,
         bool& thirdPersonMode, bool& enhancedCamera,
+        ThirdPersonCamera& orbitCamera,
         RenderPipeline& renderPipeline, const PlayerFrameState& player,
         bool& resetBossRequested, std::string& requestedSkillId,
         std::string& statusCommand,
@@ -108,6 +118,7 @@ private:
     bool captureMouse_ = false;
     bool captureKeyboard_ = false;
     bool devToolsVisible_ = false;
+    bool cameraMarkerVisible_ = false;
     glm::mat4 viewProjection_{1.0F};
     std::vector<FloatingCombatText> floatingTexts_;
     float hudAnimTime_ = 0.0F;

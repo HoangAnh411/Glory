@@ -283,6 +283,7 @@ struct PlayerFrameState {
     std::vector<StatusEffectDebugState> dummyEffects;
     float playerHp = 100.0F;
     float playerMaxHp = 100.0F;
+    bool playerDead = false;
     float bossHp = 300.0F;
     float bossMaxHp = 300.0F;
     std::string bossName;

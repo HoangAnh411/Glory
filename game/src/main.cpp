@@ -526,6 +526,7 @@ int main(int argc, char* argv[]) {
     }
     glory::game::Boss boss(bossConfig);
     bool bossEncounterActive = false;
+    float bossActivationDelayRemaining = 2.0F;
     glory::game::SkillRegistry skillRegistry = glory::game::SkillRegistry::loadFromFile(config.skillsPath);
     config.editorSkills = toEditorSkills(skillRegistry);
     glory::game::CombatSystem combat(std::move(skillRegistry),
@@ -541,6 +542,7 @@ int main(int argc, char* argv[]) {
             boss.setSpawnTransform(bossSpawn->position, bossSpawn->yaw);
         combat.dummy().hurtbox.base = boss.position();
         bossEncounterActive = false;
+        bossActivationDelayRemaining = 2.0F;
     };
     applyWorldSpawns();
 
@@ -1142,21 +1144,58 @@ int main(int argc, char* argv[]) {
         }
         const float activeMaxHp = activeClass ? activeClass->baseHp : 100.0F;
         playerEffects.update(static_cast<float>(fixedDeltaSeconds), playerHealth, activeMaxHp);
-        if (!combat.isHitStopped())
+        if (playerHealth > 0.0F && !combat.isHitStopped())
             controller.update(actionMap, cameraYawDegrees, fixedDeltaSeconds, combat.dodgeAllowed(),
                 playerEffects.calculateSpeedMultiplier(), playerEffects.isStunned());
         simulation.fixedUpdate(fixedDeltaSeconds);
         const auto& state = controller.state();
+        const bool respawnPressed = std::find(inputFrame.pressed.begin(), inputFrame.pressed.end(),
+            glory::input::Control::KeyR) != inputFrame.pressed.end();
+        if (playerHealth <= 0.0F && !respawnPressed) {
+            glory::engine::PlayerFrameState deadFrame;
+            deadFrame.position = state.position;
+            deadFrame.facingYaw = state.facingYaw;
+            deadFrame.isGrounded = state.isGrounded;
+            deadFrame.playerHp = 0.0F;
+            deadFrame.playerMaxHp = activeClass ? activeClass->baseHp : 100.0F;
+            deadFrame.playerDead = true;
+            deadFrame.className = activeClass ? activeClass->name : std::string{};
+            deadFrame.bossHp = boss.currentHp();
+            deadFrame.bossMaxHp = boss.maxHp();
+            deadFrame.bossName = boss.name();
+            deadFrame.bossPosition = boss.position();
+            deadFrame.bossYaw = boss.yawDegrees();
+            deadFrame.bossDefeated = boss.isDead();
+            deadFrame.bossPhase = boss.isDead() ? "Phase 2: DEFEATED" : "Phase 1";
+            return deadFrame;
+        }
+        if (playerHealth <= 0.0F && respawnPressed) {
+            if (const auto* playerSpawn = worldEncounter.findSpawn(glory::game::SpawnEntityType::Player))
+                controller.teleport(playerSpawn->position, playerSpawn->yaw);
+            playerHealth = activeClass ? activeClass->baseHp : 100.0F;
+            playerEffects.clear();
+            const auto& respawned = controller.state();
+            worldEncounter.updateTriggers(respawned.position);
+        }
         const auto triggerEvents = worldEncounter.updateTriggers(state.position);
         for (const auto& triggerEvent : triggerEvents) {
             if (triggerEvent.transition != glory::game::TriggerTransition::Enter) continue;
-            if (triggerEvent.type == glory::game::TriggerType::BossAggro) bossEncounterActive = true;
+            if (triggerEvent.type == glory::game::TriggerType::BossAggro && !bossEncounterActive) {
+                bossEncounterActive = true;
+                bossActivationDelayRemaining = 2.0F;
+            }
             if (triggerEvent.type == glory::game::TriggerType::HealArea)
                 playerHealth = activeClass ? activeClass->baseHp : 100.0F;
             if (triggerEvent.type == glory::game::TriggerType::HazardArea)
                 playerHealth = std::max(0.0F, playerHealth - 10.0F);
         }
-        if (boss.currentHp() < boss.maxHp()) bossEncounterActive = true;
+        if (boss.currentHp() < boss.maxHp() && !bossEncounterActive) {
+            bossEncounterActive = true;
+            bossActivationDelayRemaining = 2.0F;
+        }
+        if (bossEncounterActive && bossActivationDelayRemaining > 0.0F)
+            bossActivationDelayRemaining = std::max(0.0F,
+                bossActivationDelayRemaining - static_cast<float>(fixedDeltaSeconds));
         if (state.position.z >= 16.0F) {
             zonePanel.currentZone = "Thành Trấn Khởi Nguyên (Sanctuary Citadel)";
         } else if (state.position.z >= -25.0F) {
@@ -1193,7 +1232,7 @@ int main(int argc, char* argv[]) {
         if (!combat.hitEvents().empty()) boss.stagger(0.06F);
         if (combat.dummy().statusEffects.isStunned())
             boss.stagger(static_cast<float>(fixedDeltaSeconds));
-        const glory::game::BossUpdateResult bossResult = bossEncounterActive
+        const glory::game::BossUpdateResult bossResult = bossEncounterActive && bossActivationDelayRemaining <= 0.0F
             ? boss.update(static_cast<float>(fixedDeltaSeconds), state.position, state.isInvulnerable)
             : glory::game::BossUpdateResult{};
         if (bossResult.playerDamage > 0.0F) {

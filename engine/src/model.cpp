@@ -3,6 +3,7 @@
 #include "glory/engine/image_loader.hpp"
 #include <memory>
 #include <limits>
+#include <glm/vec4.hpp>
 namespace glory::engine {
 Model::Model(GlApi& gl, const std::filesystem::path& path) : asset_(loadGltfAsset(path)) {
     ImageData image = asset_.embeddedTexture.empty() ? loadImage(asset_.texturePath) : decodeImage(asset_.embeddedTexture);
@@ -76,6 +77,23 @@ std::pair<glm::vec3, glm::vec3> Model::localBounds() const noexcept {
         const glm::vec3 position{vertex.position[0], vertex.position[1], vertex.position[2]};
         minimum = glm::min(minimum, position);
         maximum = glm::max(maximum, position);
+    }
+    return {minimum, maximum};
+}
+std::pair<glm::vec3, glm::vec3> Model::animatedBounds() const {
+    if (!asset_.hasSkin) return localBounds();
+    const std::vector<glm::mat4> palette = skinPalette();
+    glm::vec3 minimum(std::numeric_limits<float>::max());
+    glm::vec3 maximum(std::numeric_limits<float>::lowest());
+    for (const GltfVertex& vertex : asset_.vertices) {
+        glm::mat4 skin(0.0F);
+        for (std::size_t influence = 0; influence < 4; ++influence) {
+            const std::size_t joint = vertex.joints[influence];
+            if (joint < palette.size()) skin += palette[joint] * vertex.weights[influence];
+        }
+        const glm::vec3 point = glm::vec3(skin * glm::vec4(vertex.position[0], vertex.position[1], vertex.position[2], 1.0F));
+        minimum = glm::min(minimum, point);
+        maximum = glm::max(maximum, point);
     }
     return {minimum, maximum};
 }

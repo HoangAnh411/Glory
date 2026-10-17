@@ -16,8 +16,11 @@
 #include <cmath>
 #include <cstdio>
 #include <cfloat>
+#include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <string_view>
+#include <nlohmann/json.hpp>
 
 namespace glory::engine {
 namespace {
@@ -29,6 +32,17 @@ bool inputString(const char* label, std::string& value, ImGuiInputTextFlags flag
     if (!ImGui::InputText(label, buffer.data(), buffer.size(), flags)) return false;
     value = buffer.data();
     return true;
+}
+
+void saveCameraSettings(const ThirdPersonCamera& camera) {
+    std::error_code error;
+    std::filesystem::create_directories("settings", error);
+    if (error) return;
+    std::ofstream output("settings/camera.json", std::ios::trunc);
+    if (!output) return;
+    output << nlohmann::json{{"distance", camera.distance()}, {"fov", camera.fieldOfViewDegrees()},
+        {"shoulder", camera.shoulderOffset()}, {"mouse_sensitivity", camera.mouseSensitivity()},
+        {"invert_mouse_y", camera.invertMouseY()}}.dump(2) << '\n';
 }
 
 std::string diagnosticEscape(std::string_view value) {
@@ -229,6 +243,19 @@ void DebugPanel::renderGameHud(const PlayerFrameState& player, std::string& requ
     ImGui::End();
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor(2);
+
+    if (player.playerDead) {
+        const char* defeated = "Đã bị đánh bại";
+        const char* respawn = "Nhấn R để hồi sinh";
+        const float centerX = vpPos.x + vpSize.x * 0.5F;
+        const float centerY = vpPos.y + vpSize.y * 0.62F;
+        ImDrawList* overlay = ImGui::GetForegroundDrawList();
+        const ImVec2 textSize = ImGui::CalcTextSize(defeated);
+        overlay->AddText(ImVec2(centerX - textSize.x * 0.5F, centerY), IM_COL32(255, 75, 75, 255), defeated);
+        const ImVec2 respawnSize = ImGui::CalcTextSize(respawn);
+        overlay->AddText(ImVec2(centerX - respawnSize.x * 0.5F, centerY + 32.0F),
+            IM_COL32(245, 230, 205, 245), respawn);
+    }
 
     // 3. Boss Health Bar (Top-Center)
     if (!player.bossName.empty() && GameHudCalculations::shouldShowBossBar(player.bossDefeated, player.bossHp, player.bossMaxHp, true)) {
@@ -442,7 +469,7 @@ void DebugPanel::renderGameHud(const PlayerFrameState& player, std::string& requ
 void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
     const glm::vec3& cameraPosition, float cameraYaw, float cameraPitch,
     const CameraDebugMetrics& cameraMetrics, bool& thirdPersonMode,
-    bool& enhancedCamera, RenderPipeline& renderPipeline,
+    bool& enhancedCamera, ThirdPersonCamera& orbitCamera, RenderPipeline& renderPipeline,
     const PlayerFrameState& player, bool& resetBossRequested,
     std::string& requestedSkillId,
     std::string& statusCommand, std::vector<SkillEditorSkill>& editorSkills,
@@ -470,6 +497,26 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
 
     // Always render clean Player Game HUD overlay
     renderGameHud(player, requestedSkillId, frameSeconds > 0.0F ? frameSeconds : 0.016F);
+    if (cameraMarkerVisible_ || devToolsVisible_) {
+        const auto projectDebugPoint = [&](const glm::vec3& world, ImVec2& screen) {
+            const glm::vec4 clip = viewProjection_ * glm::vec4(world, 1.0F);
+            if (!std::isfinite(clip.w) || clip.w <= 0.001F) return false;
+            const ImVec2 size = ImGui::GetMainViewport()->Size;
+            const ImVec2 origin = ImGui::GetMainViewport()->Pos;
+            screen = ImVec2(origin.x + (clip.x / clip.w * 0.5F + 0.5F) * size.x,
+                origin.y + (1.0F - (clip.y / clip.w * 0.5F + 0.5F)) * size.y);
+            return true;
+        };
+        ImVec2 pivotScreen{}, cameraScreen{};
+        ImDrawList* debugDraw = ImGui::GetBackgroundDrawList();
+        if (debugDraw && projectDebugPoint(cameraMetrics.playerPivot, pivotScreen)) {
+            debugDraw->AddCircle(pivotScreen, 8.0F, IM_COL32(40, 255, 170, 240), 16, 2.0F);
+            debugDraw->AddLine(ImVec2(pivotScreen.x - 12, pivotScreen.y),
+                ImVec2(pivotScreen.x + 12, pivotScreen.y), IM_COL32(40, 255, 170, 240), 2.0F);
+            if (projectDebugPoint(cameraMetrics.position, cameraScreen))
+                debugDraw->AddLine(pivotScreen, cameraScreen, IM_COL32(60, 220, 255, 210), 2.0F);
+        }
+    }
 
     // Closed Beta Feedback Window (F8)
     if (feedbackPanel) {
@@ -592,6 +639,33 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     ImGui::Text("Mode: %s", thirdPersonMode ? "Third-Person" : "Free-Fly");
                     ImGui::Checkbox("Third-Person Camera (F1)", &thirdPersonMode);
                     ImGui::Checkbox("Enhanced Shoulder Camera (compare old)", &enhancedCamera);
+                    bool cameraSettingsChanged = false;
+                    float cameraSensitivity = orbitCamera.mouseSensitivity();
+                    if (ImGui::SliderFloat("Mouse sensitivity", &cameraSensitivity, 0.02F, 0.5F, "%.2f deg/pixel")) {
+                        orbitCamera.setMouseSensitivity(cameraSensitivity);
+                        cameraSettingsChanged = true;
+                    }
+                    bool invertMouseY = orbitCamera.invertMouseY();
+                    if (ImGui::Checkbox("Invert camera Y", &invertMouseY)) {
+                        orbitCamera.setInvertMouseY(invertMouseY);
+                        cameraSettingsChanged = true;
+                    }
+                    float orbitDistance = orbitCamera.distance();
+                    if (ImGui::SliderFloat("Orbit distance", &orbitDistance, 3.0F, 8.0F, "%.1f m")) {
+                        orbitCamera.setZoom(orbitDistance);
+                        cameraSettingsChanged = true;
+                    }
+                    float orbitFov = orbitCamera.fieldOfViewDegrees();
+                    if (ImGui::SliderFloat("Orbit FOV", &orbitFov, 40.0F, 80.0F, "%.0f deg")) {
+                        orbitCamera.setFieldOfView(orbitFov);
+                        cameraSettingsChanged = true;
+                    }
+                    float shoulder = orbitCamera.shoulderOffset();
+                    if (ImGui::SliderFloat("Shoulder offset", &shoulder, 0.0F, 0.4F, "%.2f m")) {
+                        orbitCamera.setShoulderOffset(shoulder);
+                        cameraSettingsChanged = true;
+                    }
+                    if (cameraSettingsChanged) saveCameraSettings(orbitCamera);
                     ImGui::Text("Position: %.2f, %.2f, %.2f | Yaw: %.1f | Pitch: %.1f",
                         cameraPosition.x, cameraPosition.y, cameraPosition.z, cameraYaw, cameraPitch);
                     ImGui::Text("Spring arm blocker: %s | clear distance: %.2f m",
@@ -601,9 +675,17 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                         cameraMetrics.desiredArmLength, cameraMetrics.actualArmLength);
                     ImGui::Text("Shoulder applied: %+.2f m | Arm lateral slide: %+.2f m",
                         cameraMetrics.appliedShoulderOffset, cameraMetrics.springArmLateralSlide);
-                    ImGui::Text("Target lock: %s | Player NDC: (%.3f, %.3f) | Player: %s",
-                        cameraMetrics.targetLockActive ? "ON" : "OFF", cameraMetrics.playerNdc.x,
-                        cameraMetrics.playerNdc.y, cameraMetrics.playerAlive ? "alive" : "dead");
+                    ImGui::Text("Composition offset: %+.2f m",
+                        cameraMetrics.compositionOffset);
+                    ImGui::Text("Target lock: %s | Pivot NDC: (%.3f, %.3f) | Player: %s",
+                        cameraMetrics.targetLockActive ? "ON" : "OFF", cameraMetrics.pivotNdc.x,
+                        cameraMetrics.pivotNdc.y, cameraMetrics.playerAlive ? "alive" : "dead");
+                    ImGui::Text("Player mesh NDC bounds: (%.3f, %.3f) - (%.3f, %.3f)",
+                        cameraMetrics.playerNdcMinimum.x, cameraMetrics.playerNdcMinimum.y,
+                        cameraMetrics.playerNdcMaximum.x, cameraMetrics.playerNdcMaximum.y);
+                    ImGui::Text("Boss mesh NDC bounds: (%.3f, %.3f) - (%.3f, %.3f)",
+                        cameraMetrics.bossNdcMinimum.x, cameraMetrics.bossNdcMinimum.y,
+                        cameraMetrics.bossNdcMaximum.x, cameraMetrics.bossNdcMaximum.y);
                     ImGui::SeparatorText("HDR / Linear Color / GPU Timing");
                     bool hdrEnabled = renderPipeline.hdrEnabled();
                     if (ImGui::Checkbox("HDR + Linear + Tonemap", &hdrEnabled)) renderPipeline.setHdrEnabled(hdrEnabled);

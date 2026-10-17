@@ -42,10 +42,13 @@ public:
         const std::vector<RenderActor>& actors = {}) const;
     void updateAnimation(float deltaSeconds);
     void setTransform(const glm::vec3& position, float yawDegrees) noexcept;
+    void setDeadAppearance(bool dead) noexcept { deadAppearance_ = dead; }
     [[nodiscard]] float cameraObstructionDistance(const glm::vec3& origin,
         const glm::vec3& desiredPosition, float cameraRadius = 0.2F) const noexcept;
     [[nodiscard]] const std::string& cameraBlockerName() const noexcept { return cameraBlockerName_; }
+    [[nodiscard]] const glm::vec3& cameraBlockerPosition() const noexcept { return cameraBlockerPosition_; }
     [[nodiscard]] float lastCameraObstructionDistance() const noexcept { return lastCameraObstructionDistance_; }
+    [[nodiscard]] std::pair<glm::vec3, glm::vec3> localBounds() const { return model_.animatedBounds(); }
     [[nodiscard]] std::size_t spawnParticleBurst(const glm::vec3& position, std::size_t count = 48);
     [[nodiscard]] std::size_t activeParticleCount() const noexcept { return particles_.activeCount(); }
     void setAnimationPlaying(bool playing) noexcept;
@@ -126,11 +129,13 @@ private:
     float roughness_ = 0.5F;
     float ambientOcclusion_ = 1.0F;
     bool skyboxEnabled_ = true;
+    bool deadAppearance_ = false;
     glm::mat4 modelTransform_{1.0F};
     std::unique_ptr<Texture2D> arenaFloorTexture_;
     std::unordered_map<std::string, std::unique_ptr<Model>> propModelTemplates_;
     std::vector<StaticWorldProp> staticProps_;
     mutable std::string cameraBlockerName_ = "none";
+    mutable glm::vec3 cameraBlockerPosition_{0.0F};
     mutable float lastCameraObstructionDistance_ = 0.0F;
 };
 }

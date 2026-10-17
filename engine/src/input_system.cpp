@@ -29,6 +29,7 @@ input::Control translateKey(SDL_Scancode key) noexcept {
     case SDL_SCANCODE_2: return input::Control::Key2;
     case SDL_SCANCODE_3: return input::Control::Key3;
     case SDL_SCANCODE_4: return input::Control::Key4;
+    case SDL_SCANCODE_R: return input::Control::KeyR;
     case SDL_SCANCODE_TAB: return input::Control::KeyTab;
     default: return input::Control::Unknown;
     }
@@ -90,6 +91,9 @@ void InputSystem::processEvent(const SDL_Event& event) {
         pendingFrame_.mouseDeltaX += event.motion.xrel;
         pendingFrame_.mouseDeltaY += event.motion.yrel;
         break;
+    case SDL_EVENT_MOUSE_WHEEL:
+        pendingFrame_.mouseWheelY += event.wheel.y;
+        break;
     case SDL_EVENT_WINDOW_FOCUS_LOST:
         for (const input::Control control : pendingFrame_.held) {
             addUnique(pendingFrame_.released, control);
@@ -108,9 +112,16 @@ input::InputFrame InputSystem::consumeFrame() {
     frame.released = std::move(pendingFrame_.released);
     frame.mouseDeltaX = pendingFrame_.mouseDeltaX;
     frame.mouseDeltaY = pendingFrame_.mouseDeltaY;
+    frame.mouseWheelY = pendingFrame_.mouseWheelY;
     pendingFrame_.mouseDeltaX = 0.0F;
     pendingFrame_.mouseDeltaY = 0.0F;
+    pendingFrame_.mouseWheelY = 0.0F;
     return frame;
+}
+
+void InputSystem::discardMouseDelta() noexcept {
+    pendingFrame_.mouseDeltaX = 0.0F;
+    pendingFrame_.mouseDeltaY = 0.0F;
 }
 
 } // namespace glory::engine

@@ -38,6 +38,7 @@ public:
     [[nodiscard]] float roughnessFactor() const noexcept;
     [[nodiscard]] float ambientOcclusion() const noexcept;
     [[nodiscard]] std::pair<glm::vec3, glm::vec3> localBounds() const noexcept;
+    [[nodiscard]] std::pair<glm::vec3, glm::vec3> animatedBounds() const;
 private:
     GltfAsset asset_;
     std::unique_ptr<Mesh> mesh_;
