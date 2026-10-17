@@ -20,7 +20,7 @@
 
 ## Coverage
 
-- CPU tests load authored map and collider JSON, walk through both gate openings, verify a boss capsule fits through the north gate, block traversal across supports on both gates, and verify a near-arena cliff section stops movement.
+- CPU tests load authored map and collider JSON, walk through both gate openings, verify a boss capsule fits through the north gate, block traversal across supports on both gates, and independently test all six near-arena cliff sections with the arena safety radius expanded so it cannot mask a missing wall collider.
 - Existing tests continue to check distant cliffs and decorative terrain are non-blocking.
 - Top-down route/collider image: `build/wall-opening-validation/captures/walk-test-30.png`.
 - Gate close-ups inspected: `build/wall-opening-validation/captures/north-gate-topdown.png` and `build/wall-opening-validation/captures/south-gate-topdown.png`.

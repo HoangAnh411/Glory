@@ -17,6 +17,6 @@
 ## Review Result
 
 - Instance override precedence and compound parts are handled in the game collision loader, separate from rendering and combat logic.
-- The gate opening has player and boss traversal coverage; gate supports and near-arena wall collision have blocker coverage.
+- The gate opening has player and boss traversal coverage; both gate supports and all six near-arena wall sections have blocker coverage. The wall tests expand the arena boundary so a safety clamp cannot make a missing wall collider appear to pass.
 - The live walk-test exercises the same fixed update callback and loaded collision world as the client rather than only the unit-test solver.
 - Build, CTest, client smoke, bootstrap smoke, and walk-test passed. No gameplay hitbox, combo, or damage code was changed.

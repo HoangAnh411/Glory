@@ -168,17 +168,20 @@ void testAuthoredGateOpeningsAndCliffWall() {
     expect(gateSupport.position.x <= 2.9F && gateSupport.contactCount > 0,
         "gate side support remains solid beside the opening");
 
-    const auto cliff = std::find_if(world.obstacles().begin(), world.obstacles().end(), [](const Aabb& box) {
-        return box.name == "terrain_cliff_rock#60";
-    });
-    expect(cliff != world.obstacles().end(), "near-arena cliff instance has an authored wall collider");
-    if (cliff != world.obstacles().end()) {
+    CollisionWorld wallWorld = world;
+    wallWorld.setArenaBoundary(world.arenaCenter(), 1000.0F);
+    for (const int cliffIndex : {60, 61, 62, 65, 66, 67}) {
+        const std::string cliffName = "terrain_cliff_rock#" + std::to_string(cliffIndex);
+        const auto cliff = std::find_if(wallWorld.obstacles().begin(), wallWorld.obstacles().end(),
+            [&](const Aabb& box) { return box.name == cliffName && box.blocksMovement; });
+        expect(cliff != wallWorld.obstacles().end(), "every near-arena cliff has a blocking authored collider");
+        if (cliff == wallWorld.obstacles().end()) continue;
         const float z = 0.5F * (cliff->minimum.z + cliff->maximum.z);
-        const CollisionResult wall = world.resolve(capsuleAt({cliff->minimum.x - 2.0F, 0.0F, z}),
+        const CollisionResult wall = wallWorld.resolve(capsuleAt({cliff->minimum.x - 2.0F, 0.0F, z}),
             {cliff->maximum.x + 3.0F, 0.0F, z},
             {cliff->maximum.x - cliff->minimum.x + 5.0F, 0.0F, 0.0F});
         expect(wall.position.x <= cliff->minimum.x - 0.35F && wall.contactCount > 0,
-            "movement stops at the near-arena cliff wall without relying on the arena radius");
+            "each near-arena cliff wall blocks without relying on the arena radius");
     }
 }
 
