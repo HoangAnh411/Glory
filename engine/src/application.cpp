@@ -8,16 +8,23 @@
 #include "glory/engine/input_system.hpp"
 #include "glory/engine/model_renderer.hpp"
 #include "glory/engine/audio_system.hpp"
+#include "glory/engine/gl_api.hpp"
 
 #include <SDL3/SDL.h>
+#include <stb_image_write.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <exception>
 #include <memory>
+#include <fstream>
+#include <filesystem>
+#include <vector>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -155,11 +162,14 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     std::uint64_t previousCounter = SDL_GetPerformanceCounter();
     bool running = true;
         bool animationFrozenThisFrame = false;
+    std::size_t captureIndex = 0;
     int result = 0;
     try {
         DebugPanel debugPanel(window, context);
         RenderPipeline renderPipeline;
-        if (config.smokeTestTickLimit != 0) {
+        std::unique_ptr<GlApi> captureGl;
+        if (config.captureMode) captureGl = std::make_unique<GlApi>();
+        if (config.smokeTestTickLimit != 0 && !config.captureMode) {
             int smokeWidth = 0;
             int smokeHeight = 0;
             SDL_GetWindowSizeInPixels(window, &smokeWidth, &smokeHeight);
@@ -179,7 +189,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
         bossRenderer.setPbrMaterial(0.75F, 0.32F, 1.0F);
         AudioSystem audio(config.audioDirectory);
         (void)renderer.triggerAnimationState("Idle");
-        if (config.smokeTestTickLimit != 0) {
+        if (config.smokeTestTickLimit != 0 && !config.captureMode) {
             std::cout << "Smoke audio engine: " << (audio.available() ? "ready" : "unavailable") << '\n';
         }
         renderer.setAnimationEventCallback([&](const AnimationEvent& event) {
@@ -213,7 +223,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             previousCounter = currentCounter;
             animationFrozenThisFrame = player.hitStopActive;
 
-            timestep.advance(frameSeconds, [&](double fixedDeltaSeconds) {
+            if (!config.captureMode) timestep.advance(frameSeconds, [&](double fixedDeltaSeconds) {
                 if (config.smokeTestTickLimit != 0 &&
                     completedTicks >= config.smokeTestTickLimit) {
                     return;
@@ -292,6 +302,30 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 ++completedTicks;
             });
 
+            constexpr std::array captureNames{"center_boss", "pillar", "wall", "toward_sun", "away_from_sun", "boss_near"};
+            if (config.captureMode) {
+                const std::size_t scenario = captureIndex;
+                switch (scenario) {
+                case 0: player.position = {0.0F, 0.0F, 0.0F}; player.bossPosition = {-3.8F, 0.0F, 0.0F}; break;
+                case 1: player.position = {5.0F, 0.0F, 10.0F}; player.bossPosition = {-3.8F, 0.0F, 0.0F}; break;
+                case 2: player.position = {33.0F, 0.0F, 0.0F}; player.bossPosition = {25.0F, 0.0F, 0.0F}; break;
+                case 3: player.position = {0.0F, 0.0F, 0.0F}; player.bossPosition = {-3.8F, 0.0F, 0.0F}; break;
+                case 4: player.position = {0.0F, 0.0F, 0.0F}; player.bossPosition = {-3.8F, 0.0F, 0.0F}; break;
+                default: player.position = {-2.0F, 0.0F, 0.0F}; player.bossPosition = {-3.8F, 0.0F, 0.0F}; break;
+                }
+                player.playerHp = 150.0F;
+                player.playerMaxHp = 150.0F;
+                player.bossHp = 300.0F;
+                player.bossMaxHp = 300.0F;
+                player.bossDefeated = false;
+                player.isMoving = false;
+                targetLockActive = scenario == 0;
+                constexpr std::array captureYaw{180.0F, -90.0F, 0.0F, 45.0F, -135.0F, 180.0F};
+                thirdPersonCamera.setTarget(player.position);
+                thirdPersonCamera.setOrbitPose(captureYaw[scenario], 10.0F);
+                thirdPersonCamera.setLocked(targetLockActive, player.bossPosition);
+            }
+
             if (config.smokeTestTickLimit != 0 && completedTicks >= config.smokeTestTickLimit) {
                 running = false;
             }
@@ -321,10 +355,30 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             const glm::mat4 projection = thirdPersonMode ? activeThirdPersonCamera.projectionMatrix() : camera.projectionMatrix();
             debugPanel.setViewProjection(projection * view);
 
+            CameraDebugMetrics cameraMetrics;
+            cameraMetrics.position = cameraPosition;
+            const float activeYawRadians = glm::radians(cameraYaw);
+            const float activePitchRadians = glm::radians(cameraPitch);
+            const glm::vec3 freeCameraForward{std::cos(activeYawRadians) * std::cos(activePitchRadians),
+                std::sin(activePitchRadians), std::sin(activeYawRadians) * std::cos(activePitchRadians)};
+            cameraMetrics.lookAt = thirdPersonMode ? activeThirdPersonCamera.targetPosition() :
+                cameraPosition + freeCameraForward;
+            cameraMetrics.desiredArmLength = thirdPersonMode ? activeThirdPersonCamera.distance() : 0.0F;
+            cameraMetrics.actualArmLength = glm::length(cameraPosition - cameraMetrics.lookAt);
+            cameraMetrics.appliedShoulderOffset = thirdPersonMode && enhancedCamera ?
+                activeThirdPersonCamera.shoulderOffset() : 0.0F;
+            cameraMetrics.springArmLateralSlide = 0.0F;
+            cameraMetrics.blockingCollider = renderer.cameraBlockerName();
+            cameraMetrics.targetLockActive = targetLockActive;
+            const glm::vec4 playerClip = projection * view * glm::vec4(player.position + glm::vec3(0.0F, 1.0F, 0.0F), 1.0F);
+            if (std::isfinite(playerClip.w) && std::abs(playerClip.w) > 1.0e-6F)
+                cameraMetrics.playerNdc = glm::vec2(playerClip) / playerClip.w;
+            cameraMetrics.playerAlive = player.playerHp > 0.0F;
+
             renderer.setTransform(player.position, player.facingYaw);
             if (!animationFrozenThisFrame) renderer.updateAnimation(static_cast<float>(frameSeconds));
             debugPanel.beginFrame(static_cast<float>(frameSeconds), completedTicks, cameraPosition,
-                cameraYaw, cameraPitch, thirdPersonMode, enhancedCamera, renderPipeline,
+                cameraYaw, cameraPitch, cameraMetrics, thirdPersonMode, enhancedCamera, renderPipeline,
                 player, resetBossRequested,
                 requestedSkillId,
                 statusCommand,
@@ -368,6 +422,46 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 renderPipeline, renderActors);
             renderPipeline.finishFrame();
             debugPanel.render();
+            if (config.captureMode) {
+                const int width = drawableWidth;
+                const int height = drawableHeight;
+                std::vector<unsigned char> pixels(static_cast<std::size_t>(width) * height * 4U);
+                captureGl->readBuffer(GL_BACK);
+                captureGl->readPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+                for (int row = 0; row < height / 2; ++row) {
+                    const std::size_t top = static_cast<std::size_t>(row) * width * 4U;
+                    const std::size_t bottom = static_cast<std::size_t>(height - row - 1) * width * 4U;
+                    for (std::size_t column = 0; column < static_cast<std::size_t>(width) * 4U; ++column)
+                        std::swap(pixels[top + column], pixels[bottom + column]);
+                }
+                const std::filesystem::path directory = "captures";
+                std::filesystem::create_directories(directory);
+                const std::string name = captureNames[captureIndex];
+                const std::filesystem::path imagePath = directory / (name + ".png");
+                if (stbi_write_png(imagePath.string().c_str(), width, height, 4, pixels.data(), width * 4) == 0)
+                    throw std::runtime_error("Failed to write capture PNG: " + imagePath.string());
+                nlohmann::json report{
+                    {"scenario", name}, {"camera_position", {cameraMetrics.position.x, cameraMetrics.position.y, cameraMetrics.position.z}},
+                    {"look_at", {cameraMetrics.lookAt.x, cameraMetrics.lookAt.y, cameraMetrics.lookAt.z}},
+                    {"desired_arm_m", cameraMetrics.desiredArmLength}, {"actual_arm_m", cameraMetrics.actualArmLength},
+                    {"applied_shoulder_offset_m", cameraMetrics.appliedShoulderOffset},
+                    {"spring_arm_lateral_slide_m", cameraMetrics.springArmLateralSlide},
+                    {"blocking_collider", cameraMetrics.blockingCollider}, {"target_lock", cameraMetrics.targetLockActive},
+                    {"player_ndc", {cameraMetrics.playerNdc.x, cameraMetrics.playerNdc.y}},
+                    {"player_state", cameraMetrics.playerAlive ? "alive" : "dead"},
+                    {"player_position", {player.position.x, player.position.y, player.position.z}},
+                    {"boss_position", {player.bossPosition.x, player.bossPosition.y, player.bossPosition.z}},
+                    {"resolution", {width, height}}
+                };
+                std::ofstream reportFile(directory / (name + ".json"));
+                if (!reportFile) throw std::runtime_error("Failed to write capture telemetry JSON: " + name);
+                reportFile << report.dump(2) << '\n';
+                std::cout << "Captured " << name << ": NDC(" << cameraMetrics.playerNdc.x << ", "
+                          << cameraMetrics.playerNdc.y << "), arm " << cameraMetrics.actualArmLength
+                          << " m, blocker " << cameraMetrics.blockingCollider << '\n';
+                ++captureIndex;
+                if (captureIndex >= captureNames.size()) running = false;
+            }
             SDL_GL_SwapWindow(window);
         }
         if (config.smokeTestTickLimit != 0) {

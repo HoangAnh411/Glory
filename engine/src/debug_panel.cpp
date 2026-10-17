@@ -440,7 +440,8 @@ void DebugPanel::renderGameHud(const PlayerFrameState& player, std::string& requ
 }
 
 void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
-    const glm::vec3& cameraPosition, float cameraYaw, float cameraPitch, bool& thirdPersonMode,
+    const glm::vec3& cameraPosition, float cameraYaw, float cameraPitch,
+    const CameraDebugMetrics& cameraMetrics, bool& thirdPersonMode,
     bool& enhancedCamera, RenderPipeline& renderPipeline,
     const PlayerFrameState& player, bool& resetBossRequested,
     std::string& requestedSkillId,
@@ -594,7 +595,15 @@ void DebugPanel::beginFrame(float frameSeconds, std::uint64_t fixedTicks,
                     ImGui::Text("Position: %.2f, %.2f, %.2f | Yaw: %.1f | Pitch: %.1f",
                         cameraPosition.x, cameraPosition.y, cameraPosition.z, cameraYaw, cameraPitch);
                     ImGui::Text("Spring arm blocker: %s | clear distance: %.2f m",
-                        renderer.cameraBlockerName().c_str(), renderer.lastCameraObstructionDistance());
+                        cameraMetrics.blockingCollider.c_str(), renderer.lastCameraObstructionDistance());
+                    ImGui::Text("Look-at: %.2f, %.2f, %.2f | Arm desired/actual: %.2f / %.2f m",
+                        cameraMetrics.lookAt.x, cameraMetrics.lookAt.y, cameraMetrics.lookAt.z,
+                        cameraMetrics.desiredArmLength, cameraMetrics.actualArmLength);
+                    ImGui::Text("Shoulder applied: %+.2f m | Arm lateral slide: %+.2f m",
+                        cameraMetrics.appliedShoulderOffset, cameraMetrics.springArmLateralSlide);
+                    ImGui::Text("Target lock: %s | Player NDC: (%.3f, %.3f) | Player: %s",
+                        cameraMetrics.targetLockActive ? "ON" : "OFF", cameraMetrics.playerNdc.x,
+                        cameraMetrics.playerNdc.y, cameraMetrics.playerAlive ? "alive" : "dead");
                     ImGui::SeparatorText("HDR / Linear Color / GPU Timing");
                     bool hdrEnabled = renderPipeline.hdrEnabled();
                     if (ImGui::Checkbox("HDR + Linear + Tonemap", &hdrEnabled)) renderPipeline.setHdrEnabled(hdrEnabled);

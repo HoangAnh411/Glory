@@ -1,0 +1,38 @@
+{
+  "actual_arm_m": 2.499999523162842,
+  "applied_shoulder_offset_m": 0.5,
+  "blocking_collider": "terrain_cliff_rock",
+  "boss_position": [
+    25.0,
+    0.0,
+    0.0
+  ],
+  "camera_position": [
+    30.537981033325195,
+    0.9658795595169067,
+    0.5
+  ],
+  "desired_arm_m": 5.0,
+  "look_at": [
+    33.0,
+    1.399999976158142,
+    0.5
+  ],
+  "player_ndc": [
+    -0.18163619935512543,
+    -0.2544029951095581
+  ],
+  "player_position": [
+    33.0,
+    0.0,
+    0.0
+  ],
+  "player_state": "alive",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "scenario": "wall",
+  "spring_arm_lateral_slide_m": 0.0,
+  "target_lock": false
+}

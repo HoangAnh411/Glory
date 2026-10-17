@@ -1,0 +1,38 @@
+{
+  "actual_arm_m": 5.0,
+  "applied_shoulder_offset_m": 0.5,
+  "blocking_collider": "none",
+  "boss_position": [
+    -3.799999952316284,
+    0.0,
+    0.0
+  ],
+  "camera_position": [
+    2.924038887023926,
+    0.5317590832710266,
+    -0.49999958276748657
+  ],
+  "desired_arm_m": 5.0,
+  "look_at": [
+    -2.0,
+    1.399999976158142,
+    -0.5
+  ],
+  "player_ndc": [
+    -0.08953865617513657,
+    -0.12540920078754425
+  ],
+  "player_position": [
+    -2.0,
+    0.0,
+    0.0
+  ],
+  "player_state": "alive",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "scenario": "boss_near",
+  "spring_arm_lateral_slide_m": 0.0,
+  "target_lock": false
+}

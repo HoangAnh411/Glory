@@ -347,6 +347,7 @@ struct ApplicationConfig {
     int windowHeight = 720;
     bool hiddenWindow = false;
     std::uint64_t smokeTestTickLimit = 0;
+    bool captureMode = false;
     std::filesystem::path modelPath;
     std::filesystem::path bossModelPath;
     std::filesystem::path audioDirectory;

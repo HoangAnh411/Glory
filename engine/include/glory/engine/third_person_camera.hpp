@@ -71,6 +71,10 @@ public:
     }
 
     void setTarget(const glm::vec3& target) noexcept { if (finite(target)) target_ = target; }
+    void setOrbitPose(float yawDegrees, float pitchDegrees) noexcept {
+        if (std::isfinite(yawDegrees)) yawDegrees_ = std::remainder(yawDegrees, 360.0F);
+        if (std::isfinite(pitchDegrees)) pitchDegrees_ = std::clamp(pitchDegrees, minimumPitchDegrees, maximumPitchDegrees);
+    }
     void constrainArm(float maximumDistance, float deltaSeconds) noexcept {
         if (!std::isfinite(maximumDistance) || !std::isfinite(deltaSeconds) || deltaSeconds < 0.0F) return;
         const float safeDistance = std::clamp(maximumDistance, minimumArmDistance, distance_);
@@ -113,6 +117,7 @@ public:
     [[nodiscard]] float yawDegrees() const noexcept { return yawDegrees_; }
     [[nodiscard]] float pitchDegrees() const noexcept { return pitchDegrees_; }
     [[nodiscard]] float distance() const noexcept { return distance_; }
+    [[nodiscard]] float shoulderOffset() const noexcept { return shoulderOffset_; }
     [[nodiscard]] float fieldOfViewDegrees() const noexcept { return fieldOfViewDegrees_; }
     [[nodiscard]] float effectiveDistance() const noexcept { return effectiveDistance_; }
     [[nodiscard]] float aspectRatio() const noexcept { return aspectRatio_; }

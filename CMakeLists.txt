@@ -175,6 +175,7 @@ add_library(glory_engine
     engine/src/shadow_math.cpp
     engine/src/skybox.cpp
     engine/src/stb_image_impl.cpp
+    engine/src/stb_image_write_impl.cpp
     engine/src/texture2d.cpp
     engine/src/ground_plane.cpp
 )

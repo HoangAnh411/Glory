@@ -39,6 +39,19 @@ struct GameHudCalculations {
     }
 };
 
+struct CameraDebugMetrics {
+    glm::vec3 position{0.0F};
+    glm::vec3 lookAt{0.0F};
+    float desiredArmLength = 0.0F;
+    float actualArmLength = 0.0F;
+    float appliedShoulderOffset = 0.0F;
+    float springArmLateralSlide = 0.0F;
+    std::string blockingCollider = "none";
+    bool targetLockActive = false;
+    glm::vec2 playerNdc{0.0F};
+    bool playerAlive = true;
+};
+
 class DebugPanel {
 public:
     DebugPanel(SDL_Window* window, void* glContext);
@@ -53,7 +66,8 @@ public:
     void setDevToolsVisible(bool visible) noexcept { devToolsVisible_ = visible; }
     [[nodiscard]] bool isFeedbackOpen() const noexcept { return feedbackOpenRequested_; }
     void beginFrame(float frameSeconds, std::uint64_t fixedTicks, const glm::vec3& cameraPosition,
-        float cameraYaw, float cameraPitch, bool& thirdPersonMode, bool& enhancedCamera,
+        float cameraYaw, float cameraPitch, const CameraDebugMetrics& cameraMetrics,
+        bool& thirdPersonMode, bool& enhancedCamera,
         RenderPipeline& renderPipeline, const PlayerFrameState& player,
         bool& resetBossRequested, std::string& requestedSkillId,
         std::string& statusCommand,

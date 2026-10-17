@@ -85,6 +85,7 @@ GlApi::GlApi() {
     timerQueriesAvailable = genQueries && deleteQueries && beginQuery && endQuery &&
         queryCounter && getQueryObjectiv && getQueryObjectui64v;
     getString = loadProcedure<GloryGlGetStringProc>("glGetString");
+    readPixels = loadProcedure<GloryGlReadPixelsProc>("glReadPixels");
 }
 
 } // namespace glory::engine

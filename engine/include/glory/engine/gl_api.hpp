@@ -39,6 +39,8 @@ typedef void (APIENTRYP GloryGlQueryCounterProc)(GLuint query, GLenum target);
 typedef void (APIENTRYP GloryGlGetQueryObjectivProc)(GLuint query, GLenum name, GLint* value);
 typedef void (APIENTRYP GloryGlGetQueryObjectui64vProc)(GLuint query, GLenum name, GLuint64* value);
 typedef const GLubyte* (APIENTRYP GloryGlGetStringProc)(GLenum name);
+typedef void (APIENTRYP GloryGlReadPixelsProc)(GLint x, GLint y, GLsizei width, GLsizei height,
+    GLenum format, GLenum type, void* pixels);
 
 namespace glory::engine {
 
@@ -108,6 +110,7 @@ public:
     GloryGlGetQueryObjectivProc getQueryObjectiv = nullptr;
     GloryGlGetQueryObjectui64vProc getQueryObjectui64v = nullptr;
     GloryGlGetStringProc getString = nullptr;
+    GloryGlReadPixelsProc readPixels = nullptr;
     bool timerQueriesAvailable = false;
 };
 
