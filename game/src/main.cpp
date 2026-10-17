@@ -1419,7 +1419,7 @@ int main(int argc, char* argv[]) {
                                 position.z - collisionWorld.arenaCenter().y};
                             const float radial = glm::length(offset);
                             const auto corrected = collisionWorld.resolve(capsule, position, {});
-                            if (radial > collisionWorld.arenaRadius() - capsule.radius + 0.02F ||
+                            if (radial > collisionWorld.arenaRadius() + 0.5F + 0.02F ||
                                 glm::distance(corrected.position, position) > 0.02F) {
                                 std::string blocker = "arena boundary";
                                 for (const auto& box : collisionWorld.obstacles()) {
@@ -1486,13 +1486,13 @@ int main(int argc, char* argv[]) {
                 return controller.state().position;
             };
             const glm::vec3 northGateResult = runCollisionRoute(0, {0.0F, 0.0F, 16.0F}, 90.0F,
-                glory::input::Control::KeyW, 3.5F, {0.0F, 0.0F, -30.0F});
+                glory::input::Control::KeyW, 5.0F, {0.0F, 0.0F, -30.0F});
             const glm::vec3 southGateResult = runCollisionRoute(1, {0.0F, 0.0F, -16.0F}, -90.0F,
-                glory::input::Control::KeyW, 3.5F, {0.0F, 0.0F, 30.0F});
-            const glm::vec3 cliffWallResult = runCollisionRoute(2, {-32.0F, 0.0F, 0.0F}, 0.0F,
-                glory::input::Control::KeyW, 3.5F, {32.0F, 0.0F, 0.0F});
-            if (northGateResult.z < 28.8F || southGateResult.z > -28.8F ||
-                cliffWallResult.x >= -29.0F || cliffWallResult.x < -31.5F) {
+                glory::input::Control::KeyW, 5.0F, {0.0F, 0.0F, 30.0F});
+            const glm::vec3 cliffWallResult = runCollisionRoute(2, {-10.0F, 0.0F, 0.0F}, 180.0F,
+                glory::input::Control::KeyW, 5.0F, {32.0F, 0.0F, 0.0F});
+            if (northGateResult.z < 36.0F || southGateResult.z > -36.0F ||
+                cliffWallResult.x > -13.0F || cliffWallResult.x < -18.0F) {
                 failed = true;
                 firstFailure = "collision routes failed: northGateZ=" + std::to_string(northGateResult.z) +
                     " southGateZ=" + std::to_string(southGateResult.z) +

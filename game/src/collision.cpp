@@ -200,6 +200,8 @@ CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldM
             (typeOverride != colliderOverrides.end() ? &*typeOverride : nullptr);
         const bool blocksMovement = override != nullptr
             ? override->value("blocksMovement", typeBlocksMovement) : typeBlocksMovement;
+        const bool hasInstanceShape = override != nullptr &&
+            ((override->contains("parts") && (*override)["parts"].is_array()) || override->contains("bounds"));
         if (override != nullptr && override->contains("parts") && (*override)["parts"].is_array()) {
             for (const auto& bounds : (*override)["parts"])
                 addLocalBounds(bounds, blocksMovement);
@@ -208,7 +210,7 @@ CollisionWorld CollisionWorld::loadFromFiles(const std::filesystem::path& worldM
         } else if (prop.contains("collision")) {
             addLocalBounds(prop["collision"], blocksMovement);
         }
-        if (prop.contains("multi_collision") && prop["multi_collision"].is_array())
+        if (!hasInstanceShape && prop.contains("multi_collision") && prop["multi_collision"].is_array())
             for (const auto& bounds : prop["multi_collision"]) addLocalBounds(bounds, blocksMovement);
     }
     for (const auto& item : colliderData.value("obstacles", Json::array())) {
@@ -349,7 +351,8 @@ CollisionResult CollisionWorld::resolve(const Capsule& capsule, const glm::vec3&
             glm::vec2 offset{candidate.x - arenaCenter_.x, candidate.z - arenaCenter_.y};
             const float distance = glm::length(offset);
             const float allowedRadius = arenaRadius_ - capsule.radius;
-            if (distance > allowedRadius && distance > contactEpsilon) {
+            // The circular boundary is only a recovery guard; authored walls define the playable edge.
+            if (distance > arenaRadius_ + 0.5F && distance > contactEpsilon) {
                 if (distance > arenaRadius_ + 0.5F) {
                     static std::atomic_flag warnedAboutArenaCorrection = ATOMIC_FLAG_INIT;
                     if (!warnedAboutArenaCorrection.test_and_set()) {

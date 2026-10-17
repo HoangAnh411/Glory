@@ -90,8 +90,9 @@ Platform (window, input, thời gian)
 - [x] Né đòn (dodge) với khung bất tử ngắn
 - [x] Va chạm capsule với địa hình
 - [x] World collision upgrade: C1 static collider data/debug, C2 player move-and-slide and arena enforcement, C3 boss movement/separation and shared camera colliders complete.
-- [x] Runtime collision re-audit: live client/server use the loaded 76-prop map, and walk-test plus eight arena-edge collider captures pass at 30/60/144 FPS. Decorative bushes and broad hill/cliff bounds are non-blocking, tree collision uses trunk-sized bounds, and solid props remain blockers. The radius-34 arena boundary remains a circular safety clamp.
+- [x] Runtime collision re-audit: live client/server use the loaded 76-prop map, and walk-test plus eight arena-edge collider captures pass at 30/60/144 FPS. Decorative bushes and broad hill/cliff bounds are non-blocking, tree collision uses trunk-sized bounds, and solid props remain blockers. The outer circular bound is a recovery guard, not an interior movement wall.
 - [x] World collision openings and wall sections: instance compound colliders leave both village gate openings traversable while their supports and six near-arena cliff-wall sections block movement; live route captures and CPU tests pass.
+- [x] Collision follow-up: full mesh-sized cliff colliders stop wall penetration, north/south roads remain open beyond the gates, and the 90 m circle is only an out-of-world recovery guard. Verified by live walk-test and top-down collision capture.
 - [x] Hitbox và hurtbox gắn theo animation
 - [x] Skill data-driven: đọc từ JSON (sát thương, cooldown, cast time)
 - [x] Combo và cửa sổ hủy chiêu (cancel window)

@@ -46,3 +46,10 @@ Correct two opposite collision errors in the live world: visible perimeter walls
 - CPU collision tests and live walk-test cover both the passable gap and solid wall cases using the actual loaded world collision data.
 - Build, all CTest tests, client smoke, bootstrap smoke, and walk-test pass. Gate and wall debug captures are visually checked.
 - No attack hitbox, combo, damage, or other combat behavior changes.
+
+## 7. Follow-up Findings and Corrections
+
+- The first cliff overrides covered only local X `8..12` (or `-12..-8`) while the rendered `terrain_cliff_rock` mesh spans local X `-12..12`. Actors could cross most of the visible rock. Use the mesh's full local bounds for each of the six near-world instances.
+- `CollisionWorld::resolve` applied the radius-34 circle as an interior wall on every step, despite only logging recovery after radius `34.5`. This closed routes in the north/south zones. Make the circle recovery-only and set its radius to 90 m so authored colliders govern the populated map zones.
+- For map variants that supply `multi_collision`, an explicit instance/type override shape replaces that map shape; it must not be appended afterward and silently narrow the authored opening.
+- Acceptance now includes live travel past both gate structures beyond the former radius-34 boundary, per-instance wall blocking tests with the safety clamp disabled, and a safety-margin regression test.

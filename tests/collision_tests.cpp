@@ -3,8 +3,10 @@
 #include <glm/geometric.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <random>
 
@@ -89,7 +91,7 @@ void testWorldColliderData() {
     const CollisionWorld world = CollisionWorld::loadFromFiles(
         std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_map.json",
         std::filesystem::path(GLORY_ASSET_DIR) / "data" / "world_colliders.json");
-    expect(nearlyEqual(world.arenaRadius(), 34.0F), "arena collider data loads the authored boundary radius");
+    expect(nearlyEqual(world.arenaRadius(), 90.0F), "world safety radius covers the authored north/south zones");
     expect(world.obstacles().size() >= 60, "world map local bounds load into the game collision world");
     const bool containsWell = std::any_of(world.obstacles().begin(), world.obstacles().end(), [](const Aabb& box) {
         return box.minimum.x < 4.0F && box.maximum.x > 6.0F && box.minimum.z < 5.0F && box.maximum.z > 7.0F;
@@ -159,6 +161,14 @@ void testAuthoredGateOpeningsAndCliffWall() {
         {0.0F, 0.0F, -30.0F}, {0.0F, 0.0F, -12.0F});
     expect(nearlyEqual(southGate.position.z, -30.0F) && southGate.contactCount == 0,
         "player capsule passes through the south gate opening");
+    const CollisionResult northRoad = world.resolve(capsuleAt({0.0F, 0.0F, 28.0F}),
+        {0.0F, 0.0F, 40.0F}, {0.0F, 0.0F, 12.0F});
+    expect(nearlyEqual(northRoad.position.z, 40.0F) && northRoad.contactCount == 0,
+        "open north road remains traversable beyond the village gate and former radius-34 clamp");
+    const CollisionResult southRoad = world.resolve(capsuleAt({0.0F, 0.0F, -28.0F}),
+        {0.0F, 0.0F, -40.0F}, {0.0F, 0.0F, -12.0F});
+    expect(nearlyEqual(southRoad.position.z, -40.0F) && southRoad.contactCount == 0,
+        "open south road remains traversable beyond the village gate and former radius-34 clamp");
     const CollisionResult bossAtNorthGate = world.resolve(Capsule{{0.0F, 0.0F, 18.0F}, 0.55F, 2.2F},
         {0.0F, 0.0F, 30.0F}, {0.0F, 0.0F, 12.0F});
     expect(nearlyEqual(bossAtNorthGate.position.z, 30.0F) && bossAtNorthGate.contactCount == 0,
@@ -168,21 +178,46 @@ void testAuthoredGateOpeningsAndCliffWall() {
     expect(gateSupport.position.x <= 2.9F && gateSupport.contactCount > 0,
         "gate side support remains solid beside the opening");
 
-    CollisionWorld wallWorld = world;
-    wallWorld.setArenaBoundary(world.arenaCenter(), 1000.0F);
     for (const int cliffIndex : {60, 61, 62, 65, 66, 67}) {
         const std::string cliffName = "terrain_cliff_rock#" + std::to_string(cliffIndex);
-        const auto cliff = std::find_if(wallWorld.obstacles().begin(), wallWorld.obstacles().end(),
+        const auto cliff = std::find_if(world.obstacles().begin(), world.obstacles().end(),
             [&](const Aabb& box) { return box.name == cliffName && box.blocksMovement; });
-        expect(cliff != wallWorld.obstacles().end(), "every near-arena cliff has a blocking authored collider");
-        if (cliff == wallWorld.obstacles().end()) continue;
+        expect(cliff != world.obstacles().end(), "every near-arena cliff has a blocking authored collider");
+        if (cliff == world.obstacles().end()) continue;
+        CollisionWorld isolatedWall;
+        isolatedWall.setArenaBoundary(world.arenaCenter(), 1000.0F);
+        isolatedWall.addObstacle(*cliff);
         const float z = 0.5F * (cliff->minimum.z + cliff->maximum.z);
-        const CollisionResult wall = wallWorld.resolve(capsuleAt({cliff->minimum.x - 2.0F, 0.0F, z}),
+        const CollisionResult wall = isolatedWall.resolve(capsuleAt({cliff->minimum.x - 2.0F, 0.0F, z}),
             {cliff->maximum.x + 3.0F, 0.0F, z},
             {cliff->maximum.x - cliff->minimum.x + 5.0F, 0.0F, 0.0F});
         expect(wall.position.x <= cliff->minimum.x - 0.35F && wall.contactCount > 0,
             "each near-arena cliff wall blocks without relying on the arena radius");
     }
+}
+
+void testInstanceShapeOverridesMapCompoundCollision() {
+    using namespace glory::game;
+    const auto uniqueId = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto fixtureDirectory = std::filesystem::temp_directory_path() /
+        ("glory-collision-override-" + std::to_string(uniqueId));
+    std::filesystem::create_directories(fixtureDirectory);
+    const auto mapPath = fixtureDirectory / "map.json";
+    const auto colliderPath = fixtureDirectory / "colliders.json";
+    {
+        std::ofstream mapFile(mapPath);
+        mapFile << R"({"props":[{"type":"gate","position":[0,0,0],"yaw":0,"scale":1,
+            "multi_collision":[[-5,0,-1,-2,4,1]]}]})";
+        std::ofstream colliderFile(colliderPath);
+        colliderFile << R"({"arena":{"center":[0,0],"radius":90},"instanceOverrides":{
+            "gate#0":{"blocksMovement":true,"parts":[[-5,0,-1,-4,4,1],[4,0,-1,5,4,1]]}}})";
+    }
+    const CollisionWorld world = CollisionWorld::loadFromFiles(mapPath, colliderPath);
+    std::filesystem::remove_all(fixtureDirectory);
+    expect(world.obstacles().size() == 2 &&
+        std::all_of(world.obstacles().begin(), world.obstacles().end(), [](const Aabb& box) {
+            return box.name == "gate#0" && box.blocksMovement;
+        }), "instance compound shape replaces generated multi-collision instead of adding a stale blocker");
 }
 
 void testNonBlockingDecorationAndBlockingTrunk() {
@@ -254,6 +289,15 @@ void testCornerStabilityAndArenaBoundary() {
 
     CollisionWorld arena;
     arena.setArenaBoundary({2.0F, -3.0F}, 34.0F);
+    const CollisionResult throughOpening = arena.resolve(capsuleAt({2.0F, 0.0F, 30.0F}),
+        {2.0F, 0.0F, 31.2F}, {0.0F, 0.0F, 1.2F});
+    expect(nearlyEqual(throughOpening.position.z, 31.2F),
+        "arena radius does not block a passable gap before the safety margin");
+    const CollisionResult recovered = arena.resolve(capsuleAt(throughOpening.position),
+        {2.0F, 0.0F, 32.0F}, {0.0F, 0.0F, 0.8F});
+    expect(recovered.position.z + 3.0F <= 34.0F + 1.0e-3F &&
+        recovered.position.z + 3.0F >= 34.0F - 0.4F - 1.0e-3F,
+        "arena safety boundary recovers actors only after leaving the safety margin");
     std::mt19937 random(4519U);
     std::uniform_real_distribution<float> delta(-3.0F, 3.0F);
     position = {2.0F, 0.0F, -3.0F};
@@ -262,8 +306,8 @@ void testCornerStabilityAndArenaBoundary() {
         position = arena.resolve(capsuleAt(position), desired, desired - position).position;
         const float dx = position.x - 2.0F;
         const float dz = position.z + 3.0F;
-        expect(dx * dx + dz * dz <= (34.0F - 0.4F) * (34.0F - 0.4F) + 1.0e-3F,
-            "random movement stays inside the radius-inset arena boundary");
+        expect(dx * dx + dz * dz <= (34.0F + 0.5F) * (34.0F + 0.5F) + 1.0e-3F,
+            "random movement remains within the arena safety recovery margin");
         expect(position.y >= 0.0F, "random movement remains supported by the ground plane");
     }
 }
@@ -275,6 +319,7 @@ int main() {
     testStepUpAndSampleTerrain();
     testWorldColliderData();
     testAuthoredGateOpeningsAndCliffWall();
+    testInstanceShapeOverridesMapCompoundCollision();
     testNonBlockingDecorationAndBlockingTrunk();
     testCapsuleActorSeparation();
     testFrameRateIndependentWallBlocking();
