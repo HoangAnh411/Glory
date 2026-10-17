@@ -263,6 +263,7 @@ int main(int argc, char* argv[]) {
     std::string connectHost;
     std::uint16_t connectPort = 7777;
     bool walkTestMode = false;
+    bool moveTestMode = false;
     for (int index = 1; index < argc; ++index) {
         if (std::strcmp(argv[index], "--smoke-test") == 0) {
             config.smokeTestTickLimit = 120;
@@ -302,6 +303,8 @@ int main(int argc, char* argv[]) {
             config.captureSuffix = "_colliders";
         } else if (std::strcmp(argv[index], "--walk-test") == 0) {
             walkTestMode = true;
+        } else if (std::strcmp(argv[index], "--move-test") == 0) {
+            moveTestMode = true;
         } else if (std::strcmp(argv[index], "--camera-test") == 0) {
             config.cameraTestMode = true;
             config.captureMode = true;
@@ -327,7 +330,7 @@ int main(int argc, char* argv[]) {
             connectHost = endpoint.substr(0, separator);
             connectPort = static_cast<std::uint16_t>(parsedPort);
         } else {
-            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture|--capture-no-hdr|--capture-720p|--capture-high-dpi|--capture-colliders|--walk-test|--camera-test] [--connect IPv4:port]\n";
+            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture|--capture-no-hdr|--capture-720p|--capture-high-dpi|--capture-colliders|--walk-test|--move-test|--camera-test] [--connect IPv4:port]\n";
             return 2;
         }
     }
@@ -1361,7 +1364,265 @@ int main(int argc, char* argv[]) {
     };
 
     int result = 0;
-    if (walkTestMode) {
+    if (moveTestMode) {
+        if (networkClient) {
+            std::cerr << "--move-test requires offline mode so it can exercise this process's live update callback.\n";
+            return 2;
+        }
+        const auto* playerSpawn = worldEncounter.findSpawn(glory::game::SpawnEntityType::Player);
+        if (!playerSpawn) {
+            std::cerr << "--move-test requires a player spawn in world_spawns.json.\n";
+            return 1;
+        }
+
+        struct MoveTrace {
+            std::string name;
+            float cameraYaw = 0.0F;
+            std::vector<glm::vec3> positions;
+            float firstSpeed = -1.0F;
+            float firstReleaseSpeed = -1.0F;
+            float minimumDirectionDot = 1.0F;
+            float finalFacingYaw = 0.0F;
+            float maximumTurnRate = 0.0F;
+        };
+        struct MoveScenario {
+            const char* name;
+            std::vector<glory::input::Control> controls;
+        };
+        const std::array<MoveScenario, 5> scenarios{{
+            {"W", {glory::input::Control::KeyW}},
+            {"A", {glory::input::Control::KeyA}},
+            {"S", {glory::input::Control::KeyS}},
+            {"D", {glory::input::Control::KeyD}},
+            {"WA", {glory::input::Control::KeyW, glory::input::Control::KeyA}},
+        }};
+        const std::array<float, 5> cameraYaws{{0.0F, 90.0F, 180.0F, 270.0F, 37.5F}};
+        constexpr double fixedDelta = 1.0 / 60.0;
+        constexpr double heldSeconds = 1.0;
+        constexpr double totalSeconds = 1.4;
+        const float targetSpeed = activeClass ? activeClass->moveSpeed : 5.5F;
+        bool failed = false;
+        std::string firstFailure;
+        std::array<float, 3> cardinalDistances{};
+        std::filesystem::create_directories("captures/move-test");
+        glory::game::CollisionWorld movementWorld;
+
+        const auto resetMovementScenario = [&](const glory::game::CollisionWorld& world) {
+            controller.setCollisionWorld(world);
+            controller.teleport(playerSpawn->position, -90.0F);
+            playerHealth = activeClass ? activeClass->baseHp : 150.0F;
+            boss.reset();
+            boss.setCollisionWorld(collisionWorld);
+            boss.setHealth(0.0F);
+            combat.resetEncounter();
+            combat.dummy().hurtbox = {boss.position(), boss.hurtbox().radius, boss.hurtbox().height};
+            combat.dummy().currentHp = boss.currentHp();
+            bossEncounterActive = false;
+            bossActivationDelayRemaining = 2.0F;
+        };
+
+        const auto runScenario = [&](int renderFps, float cameraYaw, const MoveScenario& scenario,
+            const glory::game::CollisionWorld& world, double scenarioHeldSeconds = heldSeconds) {
+            resetMovementScenario(world);
+            MoveTrace trace;
+            trace.name = scenario.name;
+            trace.cameraYaw = cameraYaw;
+            trace.positions.push_back(controller.state().position);
+            double accumulator = 0.0;
+            double fixedElapsed = 0.0;
+            float previousYaw = controller.state().facingYaw;
+            bool sawRelease = false;
+            const int renderFrames = static_cast<int>(std::ceil(totalSeconds * renderFps));
+            for (int frameIndex = 0; frameIndex < renderFrames; ++frameIndex) {
+                const double frameDelta = 1.0 / static_cast<double>(renderFps);
+                accumulator += frameDelta;
+                while (accumulator + 1.0e-9 >= fixedDelta) {
+                    glory::input::InputFrame scriptedInput;
+                    if (fixedElapsed < scenarioHeldSeconds)
+                        scriptedInput.held = scenario.controls;
+                    const glm::vec3 previousPosition = controller.state().position;
+                    const auto frame = fixedUpdate(fixedDelta, scriptedInput, cameraYaw, false, {}, {}, false);
+                    (void)frame;
+                    const auto& state = controller.state();
+                    const glm::vec3 displacement = state.position - previousPosition;
+                    const float speed = glm::length(glm::vec2(displacement.x, displacement.z)) /
+                        static_cast<float>(fixedDelta);
+                    const glm::vec2 actualVelocity{displacement.x, displacement.z};
+                    const float actualLength = glm::length(actualVelocity);
+                    glm::vec2 expectedDirection{0.0F};
+                    const float yawRadians = cameraYaw * 0.01745329251994329577F;
+                    const glm::vec2 forward{std::cos(yawRadians), std::sin(yawRadians)};
+                    const glm::vec2 right{-std::sin(yawRadians), std::cos(yawRadians)};
+                    if (std::find(scenario.controls.begin(), scenario.controls.end(),
+                            glory::input::Control::KeyW) != scenario.controls.end()) expectedDirection += forward;
+                    if (std::find(scenario.controls.begin(), scenario.controls.end(),
+                            glory::input::Control::KeyS) != scenario.controls.end()) expectedDirection -= forward;
+                    if (std::find(scenario.controls.begin(), scenario.controls.end(),
+                            glory::input::Control::KeyD) != scenario.controls.end()) expectedDirection += right;
+                    if (std::find(scenario.controls.begin(), scenario.controls.end(),
+                            glory::input::Control::KeyA) != scenario.controls.end()) expectedDirection -= right;
+                    if (glm::length(expectedDirection) > 1.0e-5F) expectedDirection = glm::normalize(expectedDirection);
+                    if (fixedElapsed < scenarioHeldSeconds && fixedElapsed >= 0.35 && actualLength > 1.0e-4F)
+                        trace.minimumDirectionDot = std::min(trace.minimumDirectionDot,
+                            glm::dot(actualVelocity / actualLength, expectedDirection));
+                    if (trace.firstSpeed < 0.0F && fixedElapsed < scenarioHeldSeconds)
+                        trace.firstSpeed = speed;
+                    if (!sawRelease && fixedElapsed >= scenarioHeldSeconds) {
+                        trace.firstReleaseSpeed = speed;
+                        sawRelease = true;
+                    }
+                    const float turnRate = std::abs(std::remainder(state.facingYaw - previousYaw, 360.0F)) /
+                        static_cast<float>(fixedDelta);
+                    trace.maximumTurnRate = std::max(trace.maximumTurnRate, turnRate);
+                    previousYaw = state.facingYaw;
+                    trace.positions.push_back(state.position);
+                    fixedElapsed += fixedDelta;
+                    accumulator -= fixedDelta;
+                }
+            }
+            trace.finalFacingYaw = controller.state().facingYaw;
+            return trace;
+        };
+
+        std::array<std::vector<MoveTrace>, 3> tracesByFps;
+        for (std::size_t fpsIndex = 0; fpsIndex < tracesByFps.size(); ++fpsIndex) {
+            const int renderFps = fpsIndex == 0 ? 30 : (fpsIndex == 1 ? 60 : 144);
+            auto& traces = tracesByFps[fpsIndex];
+            for (const float cameraYaw : cameraYaws) {
+                for (const auto& scenario : scenarios) {
+                    MoveTrace trace = runScenario(renderFps, cameraYaw, scenario, movementWorld);
+                    const float yawRadians = cameraYaw * 0.01745329251994329577F;
+                    const glm::vec2 forward{std::cos(yawRadians), std::sin(yawRadians)};
+                    const glm::vec2 right{-std::sin(yawRadians), std::cos(yawRadians)};
+                    glm::vec2 expectedDirection{0.0F};
+                    if (scenario.name[0] == 'W') expectedDirection += forward;
+                    if (scenario.name[0] == 'S') expectedDirection -= forward;
+                    if (scenario.name[0] == 'A') expectedDirection -= right;
+                    if (scenario.name[0] == 'D') expectedDirection += right;
+                    if (std::string(scenario.name) == "WA") expectedDirection = glm::normalize(forward - right);
+                    const glm::vec3 finalPosition = trace.positions.back();
+                    const float distance = glm::length(glm::vec2(finalPosition.x - playerSpawn->position.x,
+                        finalPosition.z - playerSpawn->position.z));
+                    if (std::abs(cameraYaw) < 1.0e-4F && std::string(scenario.name) == "W")
+                        cardinalDistances[fpsIndex] = distance;
+                    const float desiredYaw = std::atan2(expectedDirection.y, expectedDirection.x) *
+                        57.29577951308232F;
+                    const float facingError = std::abs(std::remainder(trace.finalFacingYaw - desiredYaw, 360.0F));
+                    if (trace.firstSpeed >= targetSpeed * 0.95F || trace.firstReleaseSpeed <= 0.0F ||
+                        trace.firstReleaseSpeed >= targetSpeed + 0.05F || trace.minimumDirectionDot < 0.985F ||
+                        trace.maximumTurnRate > 720.05F || (scenario.name[0] == 'S' && facingError > 5.0F)) {
+                        if (!failed) {
+                            failed = true;
+                            firstFailure = "fps=" + std::to_string(renderFps) + " yaw=" +
+                                std::to_string(cameraYaw) + " scenario=" + scenario.name +
+                                " firstSpeed=" + std::to_string(trace.firstSpeed) +
+                                " releaseSpeed=" + std::to_string(trace.firstReleaseSpeed) +
+                                " directionDot=" + std::to_string(trace.minimumDirectionDot) +
+                                " turnRate=" + std::to_string(trace.maximumTurnRate) +
+                                " facingError=" + std::to_string(facingError);
+                        }
+                    }
+                    traces.push_back(std::move(trace));
+                }
+            }
+        }
+
+        const float distanceTolerance = 0.02F;
+        if (std::abs(cardinalDistances[0] - cardinalDistances[1]) > distanceTolerance ||
+            std::abs(cardinalDistances[1] - cardinalDistances[2]) > distanceTolerance) {
+            failed = true;
+            if (firstFailure.empty()) firstFailure = "render FPS changed fixed-step distance";
+        }
+
+        glory::game::CollisionWorld wallWorld;
+        const float wallMinimumX = playerSpawn->position.x + 1.0F;
+        wallWorld.addObstacle({{wallMinimumX, -1.0F, playerSpawn->position.z - 20.0F},
+            {wallMinimumX + 0.5F, 3.0F, playerSpawn->position.z + 20.0F}, false, "move_test_wall", true});
+        const MoveScenario diagonalWallScenario{"WA", {glory::input::Control::KeyW, glory::input::Control::KeyA}};
+        const MoveTrace wallTrace = runScenario(60, 0.0F, diagonalWallScenario, wallWorld, 1.0);
+        const glm::vec3 wallEnd = wallTrace.positions.back();
+        const float wallStopX = wallMinimumX - 0.4F;
+        if (wallEnd.x > wallStopX + 0.08F || wallEnd.z >= playerSpawn->position.z - 0.25F) {
+            failed = true;
+            if (firstFailure.empty()) firstFailure = "diagonal wall movement did not slide: end=(" +
+                std::to_string(wallEnd.x) + "," + std::to_string(wallEnd.z) + ")";
+        }
+        controller.setCollisionWorld(collisionWorld);
+
+        const auto worldPixel = [](const glm::vec3& position) {
+            constexpr int imageSize = 1024;
+            constexpr float scale = 42.0F;
+            return glm::ivec2{imageSize / 2 + static_cast<int>(position.x * scale),
+                imageSize / 2 + static_cast<int>(position.z * scale)};
+        };
+        const auto drawLine = [](std::vector<unsigned char>& image, glm::ivec2 start, glm::ivec2 end,
+            std::array<unsigned char, 3> color) {
+            constexpr int imageSize = 1024;
+            const auto pixel = [&](glm::ivec2 point) {
+                if (point.x < 0 || point.x >= imageSize || point.y < 0 || point.y >= imageSize) return;
+                const std::size_t offset = (static_cast<std::size_t>(point.y) * imageSize + point.x) * 3;
+                image[offset] = color[0]; image[offset + 1] = color[1]; image[offset + 2] = color[2];
+            };
+            const int dx = std::abs(end.x - start.x), sx = start.x < end.x ? 1 : -1;
+            const int dy = -std::abs(end.y - start.y), sy = start.y < end.y ? 1 : -1;
+            int error = dx + dy;
+            for (;;) {
+                pixel(start);
+                if (start == end) break;
+                const int twice = 2 * error;
+                if (twice >= dy) { error += dy; start.x += sx; }
+                if (twice <= dx) { error += dx; start.y += sy; }
+            }
+        };
+        const std::array<std::array<unsigned char, 3>, 5> traceColors{{
+            {40, 220, 255}, {255, 220, 40}, {255, 100, 80}, {110, 255, 120}, {230, 70, 230}}};
+        for (std::size_t fpsIndex = 0; fpsIndex < tracesByFps.size(); ++fpsIndex) {
+            const int renderFps = fpsIndex == 0 ? 30 : (fpsIndex == 1 ? 60 : 144);
+            constexpr int imageSize = 1024;
+            std::vector<unsigned char> image(imageSize * imageSize * 3, 18);
+            for (const auto& box : collisionWorld.obstacles()) {
+                const glm::ivec2 minimum = worldPixel({box.minimum.x, 0.0F, box.minimum.z});
+                const glm::ivec2 maximum = worldPixel({box.maximum.x, 0.0F, box.maximum.z});
+                const std::array<unsigned char, 3> color = box.blocksMovement
+                    ? std::array<unsigned char, 3>{70, 180, 90} : std::array<unsigned char, 3>{60, 100, 180};
+                drawLine(image, {minimum.x, minimum.y}, {maximum.x, minimum.y}, color);
+                drawLine(image, {maximum.x, minimum.y}, {maximum.x, maximum.y}, color);
+                drawLine(image, {maximum.x, maximum.y}, {minimum.x, maximum.y}, color);
+                drawLine(image, {minimum.x, maximum.y}, {minimum.x, minimum.y}, color);
+            }
+            for (std::size_t traceIndex = 0; traceIndex < tracesByFps[fpsIndex].size(); ++traceIndex) {
+                const auto& trace = tracesByFps[fpsIndex][traceIndex];
+                const auto color = traceColors[traceIndex % traceColors.size()];
+                for (std::size_t point = 1; point < trace.positions.size(); ++point)
+                    drawLine(image, worldPixel(trace.positions[point - 1]), worldPixel(trace.positions[point]), color);
+            }
+            for (std::size_t point = 1; point < wallTrace.positions.size(); ++point)
+                drawLine(image, worldPixel(wallTrace.positions[point - 1]), worldPixel(wallTrace.positions[point]),
+                    {255, 40, 255});
+            const auto pngPath = std::filesystem::path("captures/move-test") /
+                ("move-test-" + std::to_string(renderFps) + ".png");
+            stbi_write_png(pngPath.string().c_str(), imageSize, imageSize, 3, image.data(), imageSize * 3);
+            nlohmann::json report{{"render_fps", renderFps}, {"passed", !failed},
+                {"cardinal_distance", cardinalDistances[fpsIndex]}, {"traces", nlohmann::json::array()},
+                {"wall_end", {wallEnd.x, wallEnd.y, wallEnd.z}}};
+            for (const auto& trace : tracesByFps[fpsIndex]) {
+                report["traces"].push_back({{"name", trace.name}, {"camera_yaw", trace.cameraYaw},
+                    {"first_speed", trace.firstSpeed}, {"first_release_speed", trace.firstReleaseSpeed},
+                    {"minimum_direction_dot", trace.minimumDirectionDot},
+                    {"maximum_turn_rate", trace.maximumTurnRate}, {"final_facing_yaw", trace.finalFacingYaw},
+                    {"positions", nlohmann::json::array()}});
+                auto& positions = report["traces"].back()["positions"];
+                for (const auto& position : trace.positions) positions.push_back({position.x, position.y, position.z});
+            }
+            const auto jsonPath = std::filesystem::path("captures/move-test") /
+                ("move-test-" + std::to_string(renderFps) + ".json");
+            std::ofstream jsonFile(jsonPath);
+            jsonFile << report.dump(2) << '\n';
+            std::cout << "--move-test " << renderFps << " FPS: " << (failed ? "FAIL " + firstFailure : "PASS")
+                      << ", image=" << pngPath.string() << ", trace=" << jsonPath.string() << '\n';
+        }
+        if (failed) return 1;
+    } else if (walkTestMode) {
         if (networkClient) {
             std::cerr << "--walk-test requires offline mode so it can exercise this process's live update callback.\n";
             return 2;
