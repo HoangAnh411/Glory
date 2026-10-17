@@ -1,6 +1,7 @@
 #include "glory/game/targeting.hpp"
 
 #include <glm/geometric.hpp>
+#include <glm/vec2.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -60,6 +61,14 @@ bool hasLineOfSight(const CollisionWorld& world, const glm::vec3& origin, const 
         if (obstacle.blocksMovement && segmentIntersectsAabb(start, end, obstacle)) return false;
     }
     return true;
+}
+
+bool shouldMaintainLock(const glm::vec3& playerPosition, const glm::vec3& targetPosition,
+    bool targetAlive, float lockRange) noexcept {
+    if (!targetAlive || !finite(playerPosition) || !finite(targetPosition) ||
+        !std::isfinite(lockRange) || lockRange <= 0.0F) return false;
+    const glm::vec2 delta{targetPosition.x - playerPosition.x, targetPosition.z - playerPosition.z};
+    return glm::length(delta) <= lockRange;
 }
 
 TargetingResult chooseAttackTarget(const CollisionWorld& world, const glm::vec3& playerPosition,

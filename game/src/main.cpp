@@ -1235,9 +1235,8 @@ int main(int argc, char* argv[]) {
             }
         }
         if (targetLockActive) {
-            const glm::vec3 delta = boss.position() - controller.state().position;
-            if (boss.isDead() || glm::length(glm::vec2(delta.x, delta.z)) > 30.0F ||
-                !glory::game::hasLineOfSight(collisionWorld, controller.state().position, boss.position())) {
+            if (!glory::game::shouldMaintainLock(controller.state().position, boss.position(),
+                    !boss.isDead(), 30.0F)) {
                 targetLockActive = false;
             } else {
                 targetLockPosition = boss.position();

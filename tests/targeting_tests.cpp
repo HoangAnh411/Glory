@@ -26,6 +26,12 @@ int main() {
     expect(!hasLineOfSight(world, player, target), "blocking AABB hides a target");
     expect(!chooseLockTarget(world, player, 0.0F, target, true, 25.0F, 30.0F).valid,
         "lock selection rejects a target behind a wall");
+    expect(shouldMaintainLock(player, target, true, 30.0F),
+        "active lock remains valid when a collider temporarily blocks line of sight");
+    expect(!shouldMaintainLock(player, target, false, 30.0F),
+        "active lock releases when the target dies");
+    expect(!shouldMaintainLock(player, {31.0F, 0.0F, 0.0F}, true, 30.0F),
+        "active lock releases when the target exceeds the lock range");
     expect(!chooseLockTarget(CollisionWorld{}, player, 180.0F, target, true, 25.0F, 30.0F).valid,
         "lock selection rejects a target behind the camera");
     expect(!chooseLockTarget(CollisionWorld{}, player, 0.0F, {31.0F, 0.0F, 0.0F}, true, 25.0F, 30.0F).valid,

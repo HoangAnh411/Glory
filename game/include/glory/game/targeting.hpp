@@ -18,6 +18,8 @@ struct TargetingResult {
 [[nodiscard]] float horizontalYawDegrees(const glm::vec3& from, const glm::vec3& to) noexcept;
 [[nodiscard]] bool hasLineOfSight(const CollisionWorld& world, const glm::vec3& origin,
     const glm::vec3& target) noexcept;
+[[nodiscard]] bool shouldMaintainLock(const glm::vec3& playerPosition,
+    const glm::vec3& targetPosition, bool targetAlive, float lockRange) noexcept;
 [[nodiscard]] TargetingResult chooseAttackTarget(const CollisionWorld& world,
     const glm::vec3& playerPosition, float cameraYawDegrees, const glm::vec3& targetPosition,
     bool targetAlive, AttackAimMode mode, float attackRange) noexcept;
