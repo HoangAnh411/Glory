@@ -6,6 +6,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <random>
 
 namespace {
 int failures = 0;
@@ -71,6 +72,13 @@ void testStepUpAndSampleTerrain() {
         "capsule steps over a low obstacle within the step height");
     expect(stepped.isGrounded, "capsule remains grounded on the raised step surface");
 
+    CollisionWorld tallStepWorld;
+    tallStepWorld.addObstacle({{1.0F, 0.0F, -1.0F}, {1.5F, 0.6F, 1.0F}, true});
+    const CollisionResult blockedByTallStep = tallStepWorld.resolve(capsuleAt({0.0F, 0.0F, 0.0F}),
+        {2.0F, 0.0F, 0.0F}, {5.5F, 0.0F, 0.0F}, 0.25F);
+    expect(blockedByTallStep.position.x <= 0.61F,
+        "step offset blocks an authored step taller than 0.25 m");
+
     const CollisionWorld sample = CollisionWorld::makeSampleWorld();
     expect(sample.obstacles().size() == 2 && sample.ramps().size() == 2,
         "sample terrain includes a wall, two slopes, and a low step");
@@ -88,6 +96,56 @@ void testWorldColliderData() {
     });
     expect(containsWell, "world prop collider is transformed from local bounds into world space");
 }
+
+void testFrameRateIndependentWallBlocking() {
+    using namespace glory::game;
+    CollisionWorld world;
+    world.addObstacle({{1.0F, 0.0F, -4.0F}, {1.5F, 3.0F, 4.0F}, false});
+    for (const int fps : {30, 60, 144}) {
+        for (const float speed : {5.5F, 12.0F}) {
+            glm::vec3 position{0.0F};
+            glm::vec3 velocity{speed, 0.0F, 0.0F};
+            for (int tick = 0; tick < fps * 2; ++tick) {
+                const auto result = world.resolve(capsuleAt(position), position + velocity / static_cast<float>(fps), velocity);
+                position = result.position;
+                velocity = result.velocity;
+            }
+            expect(position.x <= 0.61F && position.x >= 0.57F,
+                "walking and dodge-speed movement cannot cross an AABB at 30/60/144 Hz");
+        }
+    }
+}
+
+void testCornerStabilityAndArenaBoundary() {
+    using namespace glory::game;
+    CollisionWorld corner;
+    corner.addObstacle({{0.9F, 0.0F, -3.0F}, {1.2F, 3.0F, 3.0F}, false});
+    corner.addObstacle({{-3.0F, 0.0F, 0.9F}, {3.0F, 3.0F, 1.2F}, false});
+    glm::vec3 position{0.0F};
+    glm::vec3 velocity{8.0F, 0.0F, 8.0F};
+    for (int tick = 0; tick < 1000; ++tick) {
+        const auto result = corner.resolve(capsuleAt(position), position + velocity / 60.0F, velocity);
+        position = result.position;
+        velocity = result.velocity;
+    }
+    expect(position.x <= 0.51F && position.z <= 0.51F && position.x >= 0.48F && position.z >= 0.48F,
+        "repeated contact with a 90-degree corner settles without penetration or jitter");
+
+    CollisionWorld arena;
+    arena.setArenaBoundary({2.0F, -3.0F}, 34.0F);
+    std::mt19937 random(4519U);
+    std::uniform_real_distribution<float> delta(-3.0F, 3.0F);
+    position = {2.0F, 0.0F, -3.0F};
+    for (int tick = 0; tick < 10000; ++tick) {
+        const glm::vec3 desired = position + glm::vec3{delta(random), delta(random) * 0.2F, delta(random)};
+        position = arena.resolve(capsuleAt(position), desired, desired - position).position;
+        const float dx = position.x - 2.0F;
+        const float dz = position.z + 3.0F;
+        expect(dx * dx + dz * dz <= (34.0F - 0.4F) * (34.0F - 0.4F) + 1.0e-3F,
+            "random movement stays inside the radius-inset arena boundary");
+        expect(position.y >= 0.0F, "random movement remains supported by the ground plane");
+    }
+}
 } // namespace
 
 int main() {
@@ -95,6 +153,8 @@ int main() {
     testWalkableAndSteepSlopes();
     testStepUpAndSampleTerrain();
     testWorldColliderData();
+    testFrameRateIndependentWallBlocking();
+    testCornerStabilityAndArenaBoundary();
     if (failures != 0) {
         std::cerr << failures << " collision test(s) failed\n";
         return 1;

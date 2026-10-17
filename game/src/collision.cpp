@@ -190,13 +190,16 @@ CollisionResult CollisionWorld::resolve(const Capsule& capsule, const glm::vec3&
 
     const glm::vec3 totalDelta = desiredPosition - capsule.base;
     const float movementLength = glm::length(totalDelta);
+    if (!std::isfinite(movementLength)) return result;
     const float substepDistance = std::max(capsule.radius * 0.5F, 0.05F);
-    const float requestedSubsteps = std::ceil(movementLength / substepDistance);
-    const int substepCount = static_cast<int>(std::clamp(requestedSubsteps, 1.0F, 256.0F));
+    const double requestedSubsteps = std::max(1.0,
+        std::ceil(static_cast<double>(movementLength) / static_cast<double>(substepDistance)));
+    if (requestedSubsteps > static_cast<double>(std::numeric_limits<std::size_t>::max())) return result;
+    const std::size_t substepCount = static_cast<std::size_t>(requestedSubsteps);
     const glm::vec3 substep = totalDelta / static_cast<float>(substepCount);
     result.position = capsule.base;
 
-    for (int stepIndex = 0; stepIndex < substepCount; ++stepIndex) {
+    for (std::size_t stepIndex = 0; stepIndex < substepCount; ++stepIndex) {
         const glm::vec3 previous = result.position;
         glm::vec3 candidate = previous + substep;
         bool supportedOnObstacle = false;
@@ -270,6 +273,23 @@ CollisionResult CollisionWorld::resolve(const Capsule& capsule, const glm::vec3&
                 result.velocity.z -= intoWall * normal.y;
             }
             ++result.contactCount;
+        }
+
+        if (arenaRadius_ > capsule.radius) {
+            glm::vec2 offset{candidate.x - arenaCenter_.x, candidate.z - arenaCenter_.y};
+            const float distance = glm::length(offset);
+            const float allowedRadius = arenaRadius_ - capsule.radius;
+            if (distance > allowedRadius && distance > contactEpsilon) {
+                const glm::vec2 outward = offset / distance;
+                candidate.x = arenaCenter_.x + outward.x * allowedRadius;
+                candidate.z = arenaCenter_.y + outward.y * allowedRadius;
+                const float outwardSpeed = result.velocity.x * outward.x + result.velocity.z * outward.y;
+                if (outwardSpeed > 0.0F) {
+                    result.velocity.x -= outwardSpeed * outward.x;
+                    result.velocity.z -= outwardSpeed * outward.y;
+                }
+                ++result.contactCount;
+            }
         }
 
         if (candidate.y <= 0.0F) {
