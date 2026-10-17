@@ -250,6 +250,22 @@ int main(int argc, char* argv[]) {
             config.windowWidth = 1920;
             config.windowHeight = 1080;
             config.captureMode = true;
+        } else if (std::strcmp(argv[index], "--capture-no-hdr") == 0) {
+            config.windowWidth = 1920;
+            config.windowHeight = 1080;
+            config.captureMode = true;
+            config.captureHdrEnabled = false;
+        } else if (std::strcmp(argv[index], "--capture-720p") == 0) {
+            config.windowWidth = 1280;
+            config.windowHeight = 720;
+            config.captureMode = true;
+            config.captureSuffix = "_1280x720";
+        } else if (std::strcmp(argv[index], "--capture-high-dpi") == 0) {
+            config.windowWidth = 1920;
+            config.windowHeight = 1080;
+            config.captureMode = true;
+            config.highPixelDensity = true;
+            config.captureSuffix = "_high_dpi";
         } else if (std::strcmp(argv[index], "--connect") == 0 && index + 1 < argc) {
             const std::string endpoint(argv[++index]);
             const std::size_t separator = endpoint.rfind(':');
@@ -268,7 +284,7 @@ int main(int argc, char* argv[]) {
             connectHost = endpoint.substr(0, separator);
             connectPort = static_cast<std::uint16_t>(parsedPort);
         } else {
-            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture] [--connect IPv4:port]\n";
+            std::cerr << "Usage: glory_client [--smoke-test|--smoke-test-1080p|--capture|--capture-no-hdr|--capture-720p|--capture-high-dpi] [--connect IPv4:port]\n";
             return 2;
         }
     }

@@ -13,6 +13,7 @@
 #include <SDL3/SDL.h>
 #include <stb_image_write.h>
 #include <nlohmann/json.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include <algorithm>
 #include <array>
@@ -64,6 +65,7 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     }
 
     SDL_WindowFlags windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+    if (config.highPixelDensity) windowFlags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (config.hiddenWindow) {
         windowFlags |= SDL_WINDOW_HIDDEN;
     }
@@ -183,10 +185,16 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
     bool running = true;
         bool animationFrozenThisFrame = false;
     std::size_t captureIndex = 0;
+    int lastLoggedWindowWidth = -1;
+    int lastLoggedWindowHeight = -1;
+    int lastLoggedDrawableWidth = -1;
+    int lastLoggedDrawableHeight = -1;
+    bool projectionDiagnosticPending = true;
     int result = 0;
     try {
         DebugPanel debugPanel(window, context);
         RenderPipeline renderPipeline;
+        if (config.captureMode && !config.captureHdrEnabled) renderPipeline.setHdrEnabled(false);
         std::unique_ptr<GlApi> captureGl;
         if (config.captureMode) captureGl = std::make_unique<GlApi>();
         if (config.smokeTestTickLimit != 0 && !config.captureMode) {
@@ -371,6 +379,28 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             int drawableWidth = 0;
             int drawableHeight = 0;
             SDL_GetWindowSizeInPixels(window, &drawableWidth, &drawableHeight);
+            int windowWidthPoints = 0;
+            int windowHeightPoints = 0;
+            SDL_GetWindowSize(window, &windowWidthPoints, &windowHeightPoints);
+            const bool dimensionsChanged = windowWidthPoints != lastLoggedWindowWidth ||
+                windowHeightPoints != lastLoggedWindowHeight || drawableWidth != lastLoggedDrawableWidth ||
+                drawableHeight != lastLoggedDrawableHeight;
+            if (dimensionsChanged) {
+                const float dpiScaleX = windowWidthPoints > 0 ?
+                    static_cast<float>(drawableWidth) / static_cast<float>(windowWidthPoints) : 0.0F;
+                const float dpiScaleY = windowHeightPoints > 0 ?
+                    static_cast<float>(drawableHeight) / static_cast<float>(windowHeightPoints) : 0.0F;
+                std::cerr << "[render-diag] SDL points=" << windowWidthPoints << 'x' << windowHeightPoints
+                          << " pixels=" << drawableWidth << 'x' << drawableHeight
+                          << " dpiScale=" << dpiScaleX << 'x' << dpiScaleY
+                          << " HDR attachment=" << renderPipeline.targetWidth() << 'x'
+                          << renderPipeline.targetHeight() << '\n';
+                lastLoggedWindowWidth = windowWidthPoints;
+                lastLoggedWindowHeight = windowHeightPoints;
+                lastLoggedDrawableWidth = drawableWidth;
+                lastLoggedDrawableHeight = drawableHeight;
+                projectionDiagnosticPending = true;
+            }
             if (drawableWidth > 0 && drawableHeight > 0) {
                 camera.setAspectRatio(
                     static_cast<float>(drawableWidth) / static_cast<float>(drawableHeight));
@@ -391,6 +421,15 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
             const float cameraPitch = thirdPersonMode ? activeThirdPersonCamera.pitchDegrees() : camera.pitchDegrees();
             const glm::mat4 view = thirdPersonMode ? activeThirdPersonCamera.viewMatrix() : camera.viewMatrix();
             const glm::mat4 projection = thirdPersonMode ? activeThirdPersonCamera.projectionMatrix() : camera.projectionMatrix();
+            if (projectionDiagnosticPending) {
+                std::cerr << "[render-diag] scene projection (column-major):";
+                for (int column = 0; column < 4; ++column)
+                    for (int row = 0; row < 4; ++row)
+                        std::cerr << ' ' << projection[column][row];
+                std::cerr << "\n[render-diag] scene viewport source=SDL_GetWindowSizeInPixels "
+                          << drawableWidth << 'x' << drawableHeight << '\n';
+                projectionDiagnosticPending = false;
+            }
             debugPanel.setViewProjection(projection * view);
             debugPanel.setCameraMarkerVisible(config.captureMode || debugPanel.isDevToolsVisible());
 
@@ -474,6 +513,17 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 config.feedbackPanel, config.feedbackSubmit,
                 light, renderer, audio);
             renderPipeline.beginFrame(drawableWidth, drawableHeight);
+            glm::vec3 captureRootJoint{};
+            bool captureMarkerInFrame = false;
+            if (config.captureMode) {
+                captureRootJoint = renderer.rootJointWorldPosition();
+                const glm::vec4 markerClip = projection * view * glm::vec4(captureRootJoint, 1.0F);
+                if (!std::isfinite(markerClip.w) || markerClip.w <= 1.0e-6F)
+                    throw std::runtime_error("Capture root-joint marker is behind the camera");
+                const glm::vec2 markerNdc = glm::vec2(markerClip) / markerClip.w;
+                captureMarkerInFrame = std::abs(markerNdc.x) <= 1.0F && std::abs(markerNdc.y) <= 1.0F;
+                renderPipeline.setCaptureMarkerNdc(markerNdc);
+            }
             std::unordered_set<std::uint32_t> visibleRemoteIds;
             std::vector<RenderActor> renderActors;
             for (const auto& remote : player.remotePlayers) {
@@ -509,6 +559,51 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 std::vector<unsigned char> pixels(static_cast<std::size_t>(width) * height * 4U);
                 captureGl->readBuffer(GL_BACK);
                 captureGl->readPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+                const auto markerPixel = renderPipeline.captureMarkerPixel();
+                std::array<int, 2> markerDetectedPixel{-1, -1};
+                int markerDetectedDistance = -1;
+                std::array<unsigned char, 4> markerColor{};
+                if (captureMarkerInFrame) {
+                    const std::size_t markerOffset =
+                        (static_cast<std::size_t>(markerPixel[1]) * static_cast<std::size_t>(width) +
+                         static_cast<std::size_t>(markerPixel[0])) * 4U;
+                    markerColor = {pixels[markerOffset], pixels[markerOffset + 1],
+                        pixels[markerOffset + 2], pixels[markerOffset + 3]};
+                    markerDetectedDistance = std::numeric_limits<int>::max();
+                    for (int dy = -2; dy <= 2; ++dy) for (int dx = -2; dx <= 2; ++dx) {
+                        const int x = markerPixel[0] + dx;
+                        const int y = markerPixel[1] + dy;
+                        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+                        const std::size_t offset = (static_cast<std::size_t>(y) * width + x) * 4U;
+                        if (pixels[offset] < 220 || pixels[offset + 1] > 24 || pixels[offset + 2] < 220) continue;
+                        const int distance = std::abs(dx) + std::abs(dy);
+                        if (distance < markerDetectedDistance) {
+                            markerDetectedDistance = distance;
+                            markerDetectedPixel = {x, y};
+                        }
+                    }
+                }
+                if (captureMarkerInFrame && markerDetectedDistance > 2) {
+                    (void)stbi_write_png("captures/hdr-marker-failure.png", width, height, 4,
+                        pixels.data(), width * 4);
+                    int closestX = -1;
+                    int closestY = -1;
+                    int closestDistance = std::numeric_limits<int>::max();
+                    for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+                        const std::size_t offset = (static_cast<std::size_t>(y) * width + x) * 4U;
+                        if (pixels[offset] < 220 || pixels[offset + 1] > 24 || pixels[offset + 2] < 220) continue;
+                        const int distance = std::abs(x - markerPixel[0]) + std::abs(y - markerPixel[1]);
+                        if (distance < closestDistance) { closestDistance = distance; closestX = x; closestY = y; }
+                    }
+                    throw std::runtime_error("HDR capture marker pixel mismatch at " +
+                        std::to_string(markerPixel[0]) + "," + std::to_string(markerPixel[1]) +
+                        ": rgba=" + std::to_string(markerColor[0]) + "," +
+                        std::to_string(markerColor[1]) + "," + std::to_string(markerColor[2]) +
+                        " nearest-magenta=" + std::to_string(closestX) + "," + std::to_string(closestY) +
+                        " source=" + std::to_string(renderPipeline.captureMarkerSourceRgba()[0]) + "," +
+                        std::to_string(renderPipeline.captureMarkerSourceRgba()[1]) + "," +
+                        std::to_string(renderPipeline.captureMarkerSourceRgba()[2]));
+                }
                 for (int row = 0; row < height / 2; ++row) {
                     const std::size_t top = static_cast<std::size_t>(row) * width * 4U;
                     const std::size_t bottom = static_cast<std::size_t>(height - row - 1) * width * 4U;
@@ -518,11 +613,14 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                 const std::filesystem::path directory = "captures";
                 std::filesystem::create_directories(directory);
                 const std::string name = captureNames[captureIndex];
-                const std::filesystem::path imagePath = directory / (name + ".png");
+                const std::string captureSuffix = config.captureSuffix +
+                    (config.captureHdrEnabled ? "" : "_no_hdr");
+                const std::filesystem::path imagePath = directory / (name + captureSuffix + ".png");
                 if (stbi_write_png(imagePath.string().c_str(), width, height, 4, pixels.data(), width * 4) == 0)
                     throw std::runtime_error("Failed to write capture PNG: " + imagePath.string());
                 nlohmann::json report{
-                    {"scenario", name}, {"camera_position", {cameraMetrics.position.x, cameraMetrics.position.y, cameraMetrics.position.z}},
+                    {"scenario", name}, {"hdr_enabled", config.captureHdrEnabled},
+                    {"camera_position", {cameraMetrics.position.x, cameraMetrics.position.y, cameraMetrics.position.z}},
                     {"look_at", {cameraMetrics.lookAt.x, cameraMetrics.lookAt.y, cameraMetrics.lookAt.z}},
                     {"desired_arm_m", cameraMetrics.desiredArmLength}, {"actual_arm_m", cameraMetrics.actualArmLength},
                     {"applied_shoulder_offset_m", cameraMetrics.appliedShoulderOffset},
@@ -535,12 +633,17 @@ int runApplication(const ApplicationConfig& config, const FixedUpdateCallback& f
                         {cameraMetrics.playerNdcMaximum.x, cameraMetrics.playerNdcMaximum.y}}},
                     {"boss_ndc_bounds", {{cameraMetrics.bossNdcMinimum.x, cameraMetrics.bossNdcMinimum.y},
                         {cameraMetrics.bossNdcMaximum.x, cameraMetrics.bossNdcMaximum.y}}},
+                    {"root_joint_world", {captureRootJoint.x, captureRootJoint.y, captureRootJoint.z}},
+                    {"marker_in_frame", captureMarkerInFrame},
+                    {"marker_expected_pixel", captureMarkerInFrame ? nlohmann::json(markerPixel) : nlohmann::json(nullptr)},
+                    {"marker_detected_pixel", captureMarkerInFrame ? nlohmann::json(markerDetectedPixel) : nlohmann::json(nullptr)},
+                    {"marker_delta_pixels", markerDetectedDistance}, {"marker_readback_rgba", markerColor},
                     {"player_state", cameraMetrics.playerAlive ? "alive" : "dead"},
                     {"player_position", {player.position.x, player.position.y, player.position.z}},
                     {"boss_position", {player.bossPosition.x, player.bossPosition.y, player.bossPosition.z}},
                     {"resolution", {width, height}}
                 };
-                std::ofstream reportFile(directory / (name + ".json"));
+                std::ofstream reportFile(directory / (name + captureSuffix + ".json"));
                 if (!reportFile) throw std::runtime_error("Failed to write capture telemetry JSON: " + name);
                 reportFile << report.dump(2) << '\n';
                 std::cout << "Captured " << name << ": NDC(" << cameraMetrics.playerNdc.x << ", "

@@ -4,6 +4,8 @@
 #include <memory>
 #include <limits>
 #include <glm/vec4.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 namespace glory::engine {
 Model::Model(GlApi& gl, const std::filesystem::path& path) : asset_(loadGltfAsset(path)) {
     ImageData image = asset_.embeddedTexture.empty() ? loadImage(asset_.texturePath) : decodeImage(asset_.embeddedTexture);
@@ -96,5 +98,28 @@ std::pair<glm::vec3, glm::vec3> Model::animatedBounds() const {
         maximum = glm::max(maximum, point);
     }
     return {minimum, maximum};
+}
+
+glm::vec3 Model::rootJointPosition() const {
+    if (asset_.skeleton.jointNodeIndices.empty()) return glm::vec3(0.0F);
+    const AnimationPose pose = stateMachineActive_ ?
+        stateMachine_.pose(asset_.skeleton, asset_.animations) :
+        evaluatePose(asset_.skeleton, hasAnimation() ? &asset_.animations[animationIndex_] : nullptr,
+            animator_.time());
+    const std::uint32_t jointNode = asset_.skeleton.jointNodeIndices.front();
+    if (jointNode >= pose.size()) return glm::vec3(0.0F);
+    std::vector<std::uint32_t> hierarchy;
+    std::int32_t node = static_cast<std::int32_t>(jointNode);
+    while (node >= 0 && static_cast<std::size_t>(node) < pose.size()) {
+        hierarchy.push_back(static_cast<std::uint32_t>(node));
+        node = asset_.skeleton.nodes[static_cast<std::size_t>(node)].parent;
+    }
+    glm::mat4 world(1.0F);
+    for (auto it = hierarchy.rbegin(); it != hierarchy.rend(); ++it) {
+        const SkeletonNode& joint = pose[*it];
+        world *= glm::translate(glm::mat4(1.0F), joint.translation) *
+            glm::mat4_cast(joint.rotation) * glm::scale(glm::mat4(1.0F), joint.scale);
+    }
+    return glm::vec3(world[3]);
 }
 }

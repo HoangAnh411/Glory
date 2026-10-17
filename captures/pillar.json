@@ -24,27 +24,44 @@
   ],
   "composition_offset_m": 0.0,
   "desired_arm_m": 5.0,
+  "hdr_enabled": true,
   "look_at": [
     5.0,
     1.861392617225647,
     9.918643951416016
+  ],
+  "marker_delta_pixels": 0,
+  "marker_detected_pixel": [
+    959,
+    174
+  ],
+  "marker_expected_pixel": [
+    959,
+    174
+  ],
+  "marker_in_frame": true,
+  "marker_readback_rgba": [
+    245,
+    0,
+    245,
+    255
   ],
   "pivot_ndc": [
     -9.536742595628311e-08,
     -0.18000005185604095
   ],
   "player_ndc": [
-    -0.024959146976470947,
-    -0.37243908643722534
+    -0.020245760679244995,
+    -0.3725227117538452
   ],
   "player_ndc_bounds": [
     [
-      -0.0968189612030983,
+      -0.09236641228199005,
       -0.7820535898208618
     ],
     [
-      0.0469006672501564,
-      0.03717542067170143
+      0.05187489092350006,
+      0.037008147686719894
     ]
   ],
   "player_position": [
@@ -56,6 +73,11 @@
   "resolution": [
     1920,
     1080
+  ],
+  "root_joint_world": [
+    5.0,
+    0.0,
+    10.0
   ],
   "scenario": "pillar",
   "spring_arm_lateral_slide_m": 0.0,

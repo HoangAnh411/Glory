@@ -49,6 +49,9 @@ public:
     [[nodiscard]] const glm::vec3& cameraBlockerPosition() const noexcept { return cameraBlockerPosition_; }
     [[nodiscard]] float lastCameraObstructionDistance() const noexcept { return lastCameraObstructionDistance_; }
     [[nodiscard]] std::pair<glm::vec3, glm::vec3> localBounds() const { return model_.animatedBounds(); }
+    [[nodiscard]] glm::vec3 rootJointWorldPosition() const {
+        return glm::vec3(modelTransform_ * glm::vec4(model_.rootJointPosition(), 1.0F));
+    }
     [[nodiscard]] std::size_t spawnParticleBurst(const glm::vec3& position, std::size_t count = 48);
     [[nodiscard]] std::size_t activeParticleCount() const noexcept { return particles_.activeCount(); }
     void setAnimationPlaying(bool playing) noexcept;

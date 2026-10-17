@@ -81,6 +81,7 @@ Platform (window, input, thời gian)
 - [x] A2: HDR, ACES tonemapping, xử lý màu sRGB/linear và GPU timer query
 - [ ] A3: Ánh sáng môi trường, cascaded shadows, fog và sky gradient (reopened: ground visual root cause and camera obstruction slide/fade remain unverified)
 - Incident follow-up: F3 camera telemetry, projected local mesh bounds, and six-view PNG/JSON captures added. Camera captures still show visual-vs-NDC disagreement; framing remains unresolved. Ground root cause isolated to missing vertex color input on the ground VAO; fix pending.
+- HDR framing incident: fullscreen tonemap UVs sampled only half of the RGBA16F target (`vUv = position * 0.5`); fixed to map the full target. Capture pixel regression now verifies the projected root-joint marker after tonemapping. Windows 150% DPI remains unverified on this host; camera work remains out of scope.
 - A3c hoàn tất shadow atlas dùng chung và cascades runtime; smoke High 1080p đo 1.243 ms tổng GPU trên RTX 3050 Ti.
 - [ ] A4: Anti-aliasing, preset chất lượng và đo hiệu năng theo pass
 

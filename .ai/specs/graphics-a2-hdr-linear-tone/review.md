@@ -16,3 +16,9 @@
 - ACES output performs the only HDR-to-sRGB encoding. The legacy direct path encodes linear shader output once and bypasses the ACES pass.
 - Timer queries are asynchronous; per-pass elapsed queries are not nested, and total-frame time comes from timestamp endpoints.
 - The blue arena boundary line is an ImGui background polyline in `engine/src/debug_panel.cpp`; it is now off by default with an F3 toggle.
+
+## HDR Framing Regression Review (2026-10-17)
+- Must fix: none. The fullscreen triangle UV now spans the full HDR image; the capture regression validates the projected marker after tonemapping and would fail for the recorded pre-fix image.
+- DPI handling: render target, viewport and projection aspect use `SDL_GetWindowSizeInPixels`; diagnostics compare them to point dimensions. Actual 150% Windows scaling could not be exercised because the host reported 1x even with `SDL_WINDOW_HIGH_PIXEL_DENSITY`.
+- Pass state: scene, sky, particle/overlay, and tonemap explicitly set their drawable viewport and disable stale scissor state. Logged viewports agree with target dimensions.
+- Scope: no camera/gameplay change and no camera checklist update. Keep the separate camera framing issue pending until its own evidence is reviewed.

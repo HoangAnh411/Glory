@@ -24,27 +24,44 @@
   ],
   "composition_offset_m": 0.0,
   "desired_arm_m": 5.0,
+  "hdr_enabled": true,
   "look_at": [
     -0.04772156476974487,
     1.7827461957931519,
     -0.04772156476974487
+  ],
+  "marker_delta_pixels": 0,
+  "marker_detected_pixel": [
+    960,
+    122
+  ],
+  "marker_expected_pixel": [
+    960,
+    122
+  ],
+  "marker_in_frame": true,
+  "marker_readback_rgba": [
+    245,
+    0,
+    245,
+    255
   ],
   "pivot_ndc": [
     0.0,
     -0.1800001710653305
   ],
   "player_ndc": [
-    -0.02827082946896553,
-    -0.41219618916511536
+    -0.026041042059659958,
+    -0.4139190912246704
   ],
   "player_ndc_bounds": [
     [
-      -0.17122067511081696,
-      -0.9109774827957153
+      -0.16934393346309662,
+      -0.9138638377189636
     ],
     [
-      0.1146790161728859,
-      0.08658508956432343
+      0.1172618493437767,
+      0.0860256627202034
     ]
   ],
   "player_position": [
@@ -56,6 +73,11 @@
   "resolution": [
     1920,
     1080
+  ],
+  "root_joint_world": [
+    0.0,
+    0.0,
+    0.0
   ],
   "scenario": "away_from_sun",
   "spring_arm_lateral_slide_m": 0.0,

@@ -4,9 +4,12 @@
 #include "glory/engine/shader_program.hpp"
 #include "glory/engine/shadow_map.hpp"
 
+#include <glm/vec2.hpp>
+
 #include <array>
 #include <cstdint>
 #include <deque>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -35,7 +38,9 @@ public:
     void beginActorShadowTiming(int cascade) noexcept;
     void endActorShadowTiming(int cascade) noexcept;
     void finishFrame();
-    void setHdrEnabled(bool enabled) noexcept { hdrEnabled_ = enabled; }
+    void setHdrEnabled(bool enabled) noexcept;
+    void logPassState(const char* pass, const char* edge) noexcept;
+    void setCaptureMarkerNdc(const glm::vec2& ndc) noexcept;
     [[nodiscard]] bool hdrEnabled() const noexcept { return hdrEnabled_; }
     void setExposure(float exposure) noexcept;
     [[nodiscard]] float exposure() const noexcept { return exposure_; }
@@ -45,6 +50,10 @@ public:
     [[nodiscard]] const std::deque<GpuTimingSample>& history() const noexcept { return history_; }
     [[nodiscard]] bool framebufferComplete() const noexcept { return framebufferComplete_; }
     [[nodiscard]] std::uint64_t resizeCount() const noexcept { return resizeCount_; }
+    [[nodiscard]] int targetWidth() const noexcept { return width_; }
+    [[nodiscard]] int targetHeight() const noexcept { return height_; }
+    [[nodiscard]] std::array<int, 2> captureMarkerPixel() const noexcept { return captureMarkerPixel_; }
+    [[nodiscard]] std::array<unsigned char, 4> captureMarkerSourceRgba() const noexcept { return captureMarkerSourceRgba_; }
     [[nodiscard]] ShadowMap& shadowMap() noexcept { return shadowMap_; }
 
 private:
@@ -85,6 +94,10 @@ private:
     std::string timerStatus_;
     std::string rendererInfo_;
     std::uint64_t resizeCount_ = 0;
+    std::set<std::string> loggedPassStates_;
+    std::array<int, 2> captureMarkerPixel_{};
+    std::array<unsigned char, 4> captureMarkerSourceRgba_{};
+    bool captureMarkerEnabled_ = false;
 };
 
 } // namespace glory::engine

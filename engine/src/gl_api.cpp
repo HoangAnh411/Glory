@@ -86,6 +86,10 @@ GlApi::GlApi() {
         queryCounter && getQueryObjectiv && getQueryObjectui64v;
     getString = loadProcedure<GloryGlGetStringProc>("glGetString");
     readPixels = loadProcedure<GloryGlReadPixelsProc>("glReadPixels");
+    getIntegerv = loadProcedure<GloryGlGetIntegervProc>("glGetIntegerv");
+    getBooleanv = loadProcedure<GloryGlGetBooleanvProc>("glGetBooleanv");
+    scissor = loadProcedure<GloryGlScissorProc>("glScissor");
+    isEnabled = loadProcedure<GloryGlIsEnabledProc>("glIsEnabled");
 }
 
 } // namespace glory::engine

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <iostream>
 #include <sstream>
 #include <stdexcept>
 
@@ -14,7 +15,7 @@ uniform mat4 u_ViewProjection;
 out vec2 vUv;
 void main() {
     vec2 position = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-    vUv = position * 0.5;
+    vUv = position;
     gl_Position = u_ViewProjection * vec4(position * 2.0 - 1.0, 0.0, 1.0);
 }
 )glsl";
@@ -92,6 +93,40 @@ void RenderPipeline::setExposure(float exposure) noexcept {
     if (std::isfinite(exposure)) exposure_ = std::clamp(exposure, 0.05F, 8.0F);
 }
 
+void RenderPipeline::setHdrEnabled(bool enabled) noexcept {
+    if (hdrEnabled_ == enabled) return;
+    hdrEnabled_ = enabled;
+    loggedPassStates_.clear();
+    std::cerr << "[render-diag] HDR=" << (hdrEnabled_ ? "on" : "off")
+              << " target=" << width_ << 'x' << height_ << '\n';
+}
+
+void RenderPipeline::logPassState(const char* pass, const char* edge) noexcept {
+    const std::string key = std::string(pass) + ':' + edge;
+    if (!loggedPassStates_.insert(key).second) return;
+    GLint viewport[4]{};
+    GLint scissor[4]{};
+    GLint framebuffer = 0;
+    gl_.getIntegerv(GL_VIEWPORT, viewport);
+    gl_.getIntegerv(GL_SCISSOR_BOX, scissor);
+    gl_.getIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &framebuffer);
+    const bool scissorEnabled = gl_.isEnabled(GL_SCISSOR_TEST) == GL_TRUE;
+    std::cerr << "[render-diag] pass=" << pass << ' ' << edge
+              << " fbo=" << framebuffer
+              << " viewport=" << viewport[0] << ',' << viewport[1] << ',' << viewport[2] << ',' << viewport[3]
+              << " scissor=" << (scissorEnabled ? "on" : "off") << ':'
+              << scissor[0] << ',' << scissor[1] << ',' << scissor[2] << ',' << scissor[3]
+              << " hdrTarget=" << width_ << 'x' << height_ << '\n';
+}
+
+void RenderPipeline::setCaptureMarkerNdc(const glm::vec2& ndc) noexcept {
+    captureMarkerEnabled_ = std::isfinite(ndc.x) && std::isfinite(ndc.y) && width_ > 0 && height_ > 0 &&
+        ndc.x >= -1.0F && ndc.x <= 1.0F && ndc.y >= -1.0F && ndc.y <= 1.0F;
+    if (!captureMarkerEnabled_) return;
+    captureMarkerPixel_[0] = std::clamp(static_cast<int>((ndc.x * 0.5F + 0.5F) * width_), 0, width_ - 1);
+    captureMarkerPixel_[1] = std::clamp(static_cast<int>((ndc.y * 0.5F + 0.5F) * height_), 0, height_ - 1);
+}
+
 void RenderPipeline::resize(int width, int height) {
     GLuint nextFramebuffer = 0;
     GLuint nextColor = 0;
@@ -146,6 +181,9 @@ void RenderPipeline::resize(int width, int height) {
     height_ = height;
     framebufferComplete_ = true;
     ++resizeCount_;
+    loggedPassStates_.clear();
+    std::cerr << "[render-diag] HDR attachment resize=" << width_ << 'x' << height_
+              << " status=complete\n";
 }
 
 void RenderPipeline::collectAvailableQueries() noexcept {
@@ -207,6 +245,7 @@ void RenderPipeline::beginFrame(int width, int height) {
         }
     }
     bindSceneTarget();
+    logPassState("frame-target", "begin");
 }
 
 void RenderPipeline::bindSceneTarget() noexcept {
@@ -219,6 +258,14 @@ std::size_t RenderPipeline::passIndex(GpuPass pass) noexcept {
 }
 
 void RenderPipeline::beginPass(GpuPass pass) noexcept {
+    gl_.disable(GL_SCISSOR_TEST);
+    if (pass == GpuPass::Scene || pass == GpuPass::Sky || pass == GpuPass::ParticleOverlay) {
+        gl_.viewport(0, 0, width_, height_);
+    }
+    static constexpr std::array passNames{"shadow-cascade-0", "shadow-cascade-1", "shadow-cascade-2",
+        "shadow-cascade-3", "depth-boss-remote", "scene", "sky", "particle-overlay", "tonemap", "gpu-frame", "count"};
+    const std::size_t index = passIndex(pass);
+    if (index < passNames.size()) logPassState(passNames[index], "begin");
     if (!recordingQueries_ || pass >= GpuPass::Tonemap || activePass_ != GpuPass::Count) return;
     activePass_ = pass;
     gl_.beginQuery(GL_TIME_ELAPSED, querySlots_[activeSlot_].queries[passIndex(pass)]);
@@ -226,12 +273,19 @@ void RenderPipeline::beginPass(GpuPass pass) noexcept {
 }
 
 void RenderPipeline::endPass() noexcept {
+    if (activePass_ != GpuPass::Count) {
+        static constexpr std::array passNames{"shadow-cascade-0", "shadow-cascade-1", "shadow-cascade-2",
+            "shadow-cascade-3", "depth-boss-remote", "scene", "sky", "particle-overlay", "tonemap", "gpu-frame", "count"};
+        const std::size_t index = passIndex(activePass_);
+        if (index < passNames.size()) logPassState(passNames[index], "end");
+    }
     if (!recordingQueries_ || activePass_ == GpuPass::Count) return;
     gl_.endQuery(GL_TIME_ELAPSED);
     activePass_ = GpuPass::Count;
 }
 
 void RenderPipeline::beginActorShadowTiming(int cascade) noexcept {
+    logPassState("depth-boss-remote", "begin");
     if (!recordingQueries_ || cascade < 0 || cascade >= 4) return;
     const std::size_t queryIndex = passCount + 1 + static_cast<std::size_t>(cascade) * 2;
     gl_.queryCounter(querySlots_[activeSlot_].queries[queryIndex], GL_TIMESTAMP);
@@ -239,6 +293,7 @@ void RenderPipeline::beginActorShadowTiming(int cascade) noexcept {
 }
 
 void RenderPipeline::endActorShadowTiming(int cascade) noexcept {
+    logPassState("depth-boss-remote", "end");
     if (!recordingQueries_ || cascade < 0 || cascade >= 4) return;
     const std::size_t queryIndex = passCount + 2 + static_cast<std::size_t>(cascade) * 2;
     gl_.queryCounter(querySlots_[activeSlot_].queries[queryIndex], GL_TIMESTAMP);
@@ -246,9 +301,30 @@ void RenderPipeline::endActorShadowTiming(int cascade) noexcept {
 }
 
 void RenderPipeline::finishFrame() {
+    if (captureMarkerEnabled_) {
+        gl_.bindFramebuffer(GL_FRAMEBUFFER, hdrEnabled_ ? framebuffer_ : 0);
+        gl_.viewport(0, 0, width_, height_);
+        gl_.enable(GL_SCISSOR_TEST);
+        gl_.scissor(std::max(0, captureMarkerPixel_[0] - 1), std::max(0, captureMarkerPixel_[1] - 1),
+            std::min(3, width_), std::min(3, height_));
+        gl_.clearColor(2.0F, 0.0F, 2.0F, 1.0F);
+        gl_.clear(GL_COLOR_BUFFER_BIT);
+        gl_.disable(GL_SCISSOR_TEST);
+        if (hdrEnabled_) {
+            gl_.readPixels(captureMarkerPixel_[0], captureMarkerPixel_[1], 1, 1,
+                GL_RGBA, GL_UNSIGNED_BYTE, captureMarkerSourceRgba_.data());
+            std::cerr << "[render-diag] HDR marker source rgba="
+                      << static_cast<int>(captureMarkerSourceRgba_[0]) << ','
+                      << static_cast<int>(captureMarkerSourceRgba_[1]) << ','
+                      << static_cast<int>(captureMarkerSourceRgba_[2]) << '\n';
+        }
+        captureMarkerEnabled_ = false;
+    }
     if (hdrEnabled_) {
         gl_.bindFramebuffer(GL_FRAMEBUFFER, 0);
         gl_.viewport(0, 0, width_, height_);
+        gl_.disable(GL_SCISSOR_TEST);
+        logPassState("tonemap", "begin");
         gl_.disable(GL_DEPTH_TEST);
         if (recordingQueries_) {
             gl_.beginQuery(GL_TIME_ELAPSED, querySlots_[activeSlot_].queries[passIndex(GpuPass::Tonemap)]);
@@ -262,6 +338,7 @@ void RenderPipeline::finishFrame() {
         gl_.bindTexture(GL_TEXTURE_2D, colorTexture_);
         gl_.bindVertexArray(fullscreenVao_);
         gl_.drawArrays(GL_TRIANGLES, 0, 3);
+        logPassState("tonemap", "end");
         gl_.bindVertexArray(0);
         if (recordingQueries_) gl_.endQuery(GL_TIME_ELAPSED);
         gl_.enable(GL_DEPTH_TEST);

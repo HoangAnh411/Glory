@@ -1,0 +1,35 @@
+[render-diag] SDL points=1280x720 pixels=1280x720 dpiScale=1x1 HDR attachment=0x0
+[render-diag] scene projection (column-major): 1.08055 0 0 0 0 1.92098 0 0 0 0 -1.002 -1 0 0 -0.2002 0
+[render-diag] scene viewport source=SDL_GetWindowSizeInPixels 1280x720
+[render-diag] HDR attachment resize=1280x720 status=complete
+[render-diag] pass=frame-target begin fbo=2 viewport=0,0,1280,720 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=shadow-cascade-0 begin fbo=1 viewport=0,0,2048,2048 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=shadow-cascade-0 end fbo=1 viewport=0,0,2048,2048 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=depth-boss-remote begin fbo=1 viewport=0,0,2048,2048 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=depth-boss-remote end fbo=1 viewport=0,0,2048,2048 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=shadow-cascade-1 begin fbo=1 viewport=2048,0,2048,2048 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=shadow-cascade-1 end fbo=1 viewport=2048,0,2048,2048 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=shadow-cascade-2 begin fbo=1 viewport=0,2048,2048,2048 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=shadow-cascade-2 end fbo=1 viewport=0,2048,2048,2048 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=shadow-cascade-3 begin fbo=1 viewport=2048,2048,2048,2048 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=shadow-cascade-3 end fbo=1 viewport=2048,2048,2048,2048 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=scene begin fbo=2 viewport=0,0,1280,720 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=scene end fbo=2 viewport=0,0,1280,720 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=sky begin fbo=2 viewport=0,0,1280,720 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=sky end fbo=2 viewport=0,0,1280,720 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=particle-overlay begin fbo=2 viewport=0,0,1280,720 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] pass=particle-overlay end fbo=2 viewport=0,0,1280,720 scissor=off:0,0,1280,720 hdrTarget=1280x720
+[render-diag] HDR marker source rgba=255,0,255
+[render-diag] pass=tonemap begin fbo=0 viewport=0,0,1280,720 scissor=off:639,115,3,3 hdrTarget=1280x720
+[render-diag] pass=tonemap end fbo=0 viewport=0,0,1280,720 scissor=off:639,115,3,3 hdrTarget=1280x720
+Captured center_boss: NDC(-0.00684998, -0.338794), arm 5 m, blocker none
+[render-diag] HDR marker source rgba=255,0,255
+Captured pillar: NDC(-0.0201908, -0.372524), arm 5 m, blocker none
+[render-diag] HDR marker source rgba=255,0,255
+Captured wall: NDC(0.0211824, -0.687141), arm 2 m, blocker terrain_cliff_rock
+[render-diag] HDR marker source rgba=255,0,255
+Captured toward_sun: NDC(0.0203432, -0.416489), arm 4.36832 m, blocker none
+[render-diag] HDR marker source rgba=255,0,255
+Captured away_from_sun: NDC(-0.0303315, -0.411431), arm 4.13729 m, blocker signpost_wooden
+[render-diag] HDR marker source rgba=255,0,255
+Captured boss_near: NDC(-0.00686549, -0.34029), arm 5 m, blocker none

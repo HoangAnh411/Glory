@@ -76,6 +76,7 @@ void ShadowMap::release() noexcept {
 
 void ShadowMap::bindForWriting(int cascade) const noexcept {
     gl_.bindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
+    gl_.disable(GL_SCISSOR_TEST);
     const int tile = cascade % 4;
     gl_.viewport((tile & 1) * resolution_, (tile >> 1) * resolution_, resolution_, resolution_);
 }

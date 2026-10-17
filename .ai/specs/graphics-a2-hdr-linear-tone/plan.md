@@ -39,6 +39,12 @@ Render the complete 3D frame into a resize-safe RGBA16F target, convert color in
 - Build, relevant tests, and smoke run pass. Record real 1080p timings in `docs/perf.md` if supported.
 - No gameplay, hitbox, combo, MSAA/FXAA, or cascaded-shadow changes.
 
+## HDR Framing Regression Addendum
+- Record SDL point size, drawable pixel size/DPI scale, HDR attachment size, pass viewport/scissor, and the scene projection when enabling HDR and on resize.
+- Reset viewport/scissor for each relevant render pass and use drawable pixel dimensions for target allocation and projection aspect.
+- In `--capture`, draw a magenta marker at the renderer's root-joint world position and verify it with `glReadPixels` after tonemapping at the projected pixel. Fail capture when no marker is found within two pixels.
+- Compare six fixed views with HDR on/off at 1080p and additional drawable sizes; keep camera roadmap status unchanged until visual and pixel checks pass.
+
 ## Implementation Notes
 - Output uses manual sRGB conversion in the ACES fullscreen shader; `GL_FRAMEBUFFER_SRGB` remains disabled, so no second encoding path is active.
 - Per-pass `GL_TIME_ELAPSED` and total-frame `GL_TIMESTAMP` queries use a nonblocking three-frame ring.

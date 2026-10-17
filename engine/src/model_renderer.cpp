@@ -359,9 +359,9 @@ void ModelRenderer::render(const glm::mat4& view, const glm::mat4& projection, c
         atlas.bindForWriting(0);
         gl_.clear(GL_DEPTH_BUFFER_BIT);
         for (int cascade = 0; cascade < cascadeCount_; ++cascade) {
+            atlas.bindForWriting(cascade);
             pipeline.beginPass(static_cast<GpuPass>(static_cast<std::size_t>(GpuPass::ShadowCascade0) +
                 static_cast<std::size_t>(cascade)));
-            atlas.bindForWriting(cascade);
             depthShader_.use();
             depthShader_.setViewProjection(lightSpaces[static_cast<std::size_t>(cascade)]);
             depthShader_.setModelMatrix(glm::mat4(1.0F));
