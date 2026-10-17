@@ -11,17 +11,18 @@ struct GroundVertex {
     float position[3];
     float normal[3];
     float texCoord[2];
+    float color[4];
 };
 
 constexpr float floorY = 0.0F;
 constexpr float halfExtent = 120.0F;
 constexpr std::array<GroundVertex, 6> vertices{{
-    {{-halfExtent, floorY, -halfExtent}, {0.0F, 1.0F, 0.0F}, { 0.0F, 1.0F}},
-    {{ halfExtent, floorY,  halfExtent}, {0.0F, 1.0F, 0.0F}, { 1.0F, 0.0F}},
-    {{ halfExtent, floorY, -halfExtent}, {0.0F, 1.0F, 0.0F}, { 1.0F, 1.0F}},
-    {{-halfExtent, floorY, -halfExtent}, {0.0F, 1.0F, 0.0F}, { 0.0F, 1.0F}},
-    {{-halfExtent, floorY,  halfExtent}, {0.0F, 1.0F, 0.0F}, { 0.0F, 0.0F}},
-    {{ halfExtent, floorY,  halfExtent}, {0.0F, 1.0F, 0.0F}, { 1.0F, 0.0F}},
+    {{-halfExtent, floorY, -halfExtent}, {0.0F, 1.0F, 0.0F}, { 0.0F, 1.0F}, {1.0F, 1.0F, 1.0F, 1.0F}},
+    {{ halfExtent, floorY,  halfExtent}, {0.0F, 1.0F, 0.0F}, { 1.0F, 0.0F}, {1.0F, 1.0F, 1.0F, 1.0F}},
+    {{ halfExtent, floorY, -halfExtent}, {0.0F, 1.0F, 0.0F}, { 1.0F, 1.0F}, {1.0F, 1.0F, 1.0F, 1.0F}},
+    {{-halfExtent, floorY, -halfExtent}, {0.0F, 1.0F, 0.0F}, { 0.0F, 1.0F}, {1.0F, 1.0F, 1.0F, 1.0F}},
+    {{-halfExtent, floorY,  halfExtent}, {0.0F, 1.0F, 0.0F}, { 0.0F, 0.0F}, {1.0F, 1.0F, 1.0F, 1.0F}},
+    {{ halfExtent, floorY,  halfExtent}, {0.0F, 1.0F, 0.0F}, { 1.0F, 0.0F}, {1.0F, 1.0F, 1.0F, 1.0F}},
 }};
 
 } // namespace
@@ -46,6 +47,8 @@ GroundPlane::GroundPlane(GlApi& gl) : gl_(gl) {
     gl_.vertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const void*>(offsetof(GroundVertex, normal)));
     gl_.enableVertexAttribArray(2);
     gl_.vertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const void*>(offsetof(GroundVertex, texCoord)));
+    gl_.enableVertexAttribArray(5);
+    gl_.vertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const void*>(offsetof(GroundVertex, color)));
     gl_.bindVertexArray(0);
     gl_.bindBuffer(GL_ARRAY_BUFFER, 0);
 }
