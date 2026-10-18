@@ -1,0 +1,79 @@
+{
+  "actual_arm_m": 2.000000238418579,
+  "applied_shoulder_offset_m": 0.0,
+  "blocking_collider": "terrain_hill_green#40",
+  "boss_ndc_bounds": [
+    [
+      -0.04275732487440109,
+      0.2263990342617035
+    ],
+    [
+      0.042757514864206314,
+      0.4970320165157318
+    ]
+  ],
+  "boss_position": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "camera_position": [
+    -1.357803625978704e-06,
+    1.9318534135818481,
+    34.93707275390625
+  ],
+  "composition_offset_m": 0.0,
+  "desired_arm_m": 5.0,
+  "hdr_enabled": true,
+  "look_at": [
+    -1.443898213437933e-06,
+    1.584557056427002,
+    32.96745681762695
+  ],
+  "marker_delta_pixels": -1,
+  "marker_detected_pixel": null,
+  "marker_expected_pixel": null,
+  "marker_in_frame": false,
+  "marker_readback_rgba": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "pivot_ndc": [
+    -1.1368664798623584e-13,
+    -0.17999976873397827
+  ],
+  "player_ndc": [
+    -0.07574567198753357,
+    -0.7494326829910278
+  ],
+  "player_ndc_bounds": [
+    [
+      -0.2995072305202484,
+      -1.813727855682373
+    ],
+    [
+      0.14801588654518127,
+      0.3148624897003174
+    ]
+  ],
+  "player_position": [
+    -1.4424757637243601e-06,
+    0.0,
+    33.0
+  ],
+  "player_state": "alive",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "root_joint_world": [
+    -1.4424757637243601e-06,
+    0.0,
+    33.0
+  ],
+  "scenario": "arena_edge_2",
+  "spring_arm_lateral_slide_m": 0.0,
+  "target_lock": false
+}

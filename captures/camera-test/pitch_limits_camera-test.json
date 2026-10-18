@@ -1,0 +1,16 @@
+{
+  "arm_clear_distance_m": 5.0,
+  "blocking_collider": "none",
+  "camera_outside_collider": true,
+  "camera_test": true,
+  "camera_test_pass": true,
+  "fps_rotation_pass": true,
+  "mouse_sensitivity_deg_per_pixel": 0.10000000149011612,
+  "observed_max_pitch_degrees": 70.0,
+  "observed_min_pitch_degrees": -10.0,
+  "phase": "pitch_limits",
+  "pitch_degrees": -10.0,
+  "pivot_in_frame": true,
+  "simulated_render_fps": 60,
+  "yaw_degrees": -90.0
+}

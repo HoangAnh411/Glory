@@ -23,22 +23,37 @@
     }
   },
   "instanceOverrides": {
+    "lamp_wooden_lantern#10": {
+      "blocksMovement": true
+    },
+    "terrain_hill_green#63": {
+      "blocksMovement": true
+    },
+    "terrain_hill_green#64": {
+      "blocksMovement": true
+    },
+    "terrain_hill_green#68": {
+      "blocksMovement": true
+    },
+    "terrain_hill_green#69": {
+      "blocksMovement": true
+    },
     "village_gate_tower#35": {
       "blocksMovement": true,
       "parts": [
-        [-8.5, 0.0, -1.8, -5.5, 6.0, 1.8],
+        [-8.5, 0.0, -1.8, -5.5, 8.5, 1.8],
         [-5.2, 0.0, -1.2, -3.2, 4.2, 1.2],
         [3.2, 0.0, -1.2, 5.2, 4.2, 1.2],
-        [5.5, 0.0, -1.8, 8.5, 6.0, 1.8]
+        [5.5, 0.0, -1.8, 8.5, 8.5, 1.8]
       ]
     },
     "village_gate_tower#51": {
       "blocksMovement": true,
       "parts": [
-        [-8.5, 0.0, -1.8, -5.5, 6.0, 1.8],
+        [-8.5, 0.0, -1.8, -5.5, 8.5, 1.8],
         [-5.2, 0.0, -1.2, -3.2, 4.2, 1.2],
         [3.2, 0.0, -1.2, 5.2, 4.2, 1.2],
-        [5.5, 0.0, -1.8, 8.5, 6.0, 1.8]
+        [5.5, 0.0, -1.8, 8.5, 8.5, 1.8]
       ]
     },
     "terrain_cliff_rock#60": {

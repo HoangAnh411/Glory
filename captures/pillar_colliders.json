@@ -2,6 +2,16 @@
   "actual_arm_m": 5.0,
   "applied_shoulder_offset_m": 0.0,
   "blocking_collider": "none",
+  "boss_marker_detected_pixel": [
+    -1,
+    -1
+  ],
+  "boss_marker_in_frame": false,
+  "boss_marker_ndc": [
+    0.0,
+    0.0
+  ],
+  "boss_marker_readback_pass": true,
   "boss_ndc_bounds": [
     [
       -0.8326699137687683,
@@ -46,22 +56,28 @@
     245,
     255
   ],
+  "marker_source_readback_rgba": [
+    255,
+    0,
+    255,
+    255
+  ],
   "pivot_ndc": [
     -9.536742595628311e-08,
     -0.18000005185604095
   ],
   "player_ndc": [
-    -0.019774705171585083,
-    -0.3725338280200958
+    -0.01926114782691002,
+    -0.3725464940071106
   ],
   "player_ndc_bounds": [
     [
-      -0.09192066639661789,
+      -0.0914345234632492,
       -0.7820535898208618
     ],
     [
-      0.05237125605344772,
-      0.03698595240712166
+      0.05291222780942917,
+      0.036960624158382416
     ]
   ],
   "player_position": [

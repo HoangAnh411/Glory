@@ -1,0 +1,101 @@
+{
+  "actual_arm_m": 5.0,
+  "applied_shoulder_offset_m": 0.0,
+  "blocking_collider": "none",
+  "boss_marker_detected_pixel": [
+    66,
+    226
+  ],
+  "boss_marker_in_frame": true,
+  "boss_marker_ndc": [
+    -0.7881729006767273,
+    0.2595459818840027
+  ],
+  "boss_marker_readback_pass": true,
+  "boss_ndc_bounds": [
+    [
+      -1.2944661378860474,
+      -0.7960834503173828
+    ],
+    [
+      -0.28187963366508484,
+      1.3151754140853882
+    ]
+  ],
+  "boss_position": [
+    3.0,
+    0.0,
+    0.0
+  ],
+  "camera_position": [
+    2.0580937132308463e-07,
+    3.146641492843628,
+    -4.708369731903076
+  ],
+  "composition_offset_m": 0.0,
+  "desired_arm_m": 5.0,
+  "hdr_enabled": true,
+  "look_at": [
+    -5.300416994202806e-09,
+    1.852546215057373,
+    0.121259406208992
+  ],
+  "marker_delta_pixels": 1,
+  "marker_detected_pixel": [
+    320,
+    148
+  ],
+  "marker_expected_pixel": [
+    320,
+    147
+  ],
+  "marker_in_frame": true,
+  "marker_readback_rgba": [
+    52,
+    240,
+    174,
+    255
+  ],
+  "marker_source_readback_rgba": [
+    255,
+    0,
+    255,
+    255
+  ],
+  "pivot_ndc": [
+    0.0,
+    -0.17999997735023499
+  ],
+  "player_ndc": [
+    0.0041122883558273315,
+    -0.4216775596141815
+  ],
+  "player_ndc_bounds": [
+    [
+      -0.11371360719203949,
+      -0.8592255711555481
+    ],
+    [
+      0.12193818390369415,
+      0.015870459377765656
+    ]
+  ],
+  "player_position": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "player_state": "alive",
+  "resolution": [
+    640,
+    360
+  ],
+  "root_joint_world": [
+    0.0,
+    1.399999976158142,
+    0.0
+  ],
+  "scenario": "manual_attack",
+  "spring_arm_lateral_slide_m": 0.0,
+  "target_lock": false
+}

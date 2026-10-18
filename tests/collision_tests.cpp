@@ -121,9 +121,24 @@ void testWorldColliderData() {
         });
     };
     expect(hasType("bush_flower_cluster#", false), "bush bounds are loaded for debug but do not block movement");
-    expect(hasType("terrain_hill_green#", false), "large decorative hills do not block movement");
+    expect(hasType("terrain_hill_green#70", false), "distant decorative hills remain non-blocking");
+    expect(hasType("terrain_hill_green#63", true) && hasType("terrain_hill_green#64", true) &&
+        hasType("terrain_hill_green#68", true) && hasType("terrain_hill_green#69", true),
+        "the four visible hill walls beside spawn block movement");
     expect(hasType("terrain_cliff_rock#71", false), "distant backdrop cliffs remain non-blocking");
     expect(hasType("terrain_cliff_rock#60", true), "near-arena cliff walls have physical collision");
+    expect(hasType("lamp_wooden_lantern#10", true),
+        "lamp in the south spawn road blocks movement");
+    const CollisionResult lampFromNorth = world.resolve(capsuleAt({0.0F, 0.0F, -6.0F}),
+        {0.0F, 0.0F, -12.0F}, {0.0F, 0.0F, -6.0F});
+    expect(lampFromNorth.position.z > -8.0F && lampFromNorth.position.z < -7.5F &&
+        lampFromNorth.contactCount > 0,
+        "south spawn lamp blocks a capsule approaching from the north");
+    const CollisionResult lampFromSouth = world.resolve(capsuleAt({0.0F, 0.0F, -11.0F}),
+        {0.0F, 0.0F, -6.0F}, {0.0F, 0.0F, 5.0F});
+    expect(lampFromSouth.position.z < -9.6F && lampFromSouth.position.z > -10.0F &&
+        lampFromSouth.contactCount > 0,
+        "south spawn lamp blocks a capsule approaching from the south");
     expect(hasType("bench_wooden#", true) && hasType("fence_farm_wood#", true),
         "solid benches and fences remain movement blockers");
     const auto tree = std::find_if(world.obstacles().begin(), world.obstacles().end(), [](const Aabb& box) {
@@ -137,7 +152,13 @@ void testWorldColliderData() {
         const std::string gateName = "village_gate_tower#" + std::to_string(gateIndex);
         const auto gateParts = std::count_if(world.obstacles().begin(), world.obstacles().end(),
             [&](const Aabb& box) { return box.name == gateName && box.blocksMovement; });
+        float gateMaxY = 0.0F;
+        for (const Aabb& box : world.obstacles()) {
+            if (box.name == gateName && box.blocksMovement) gateMaxY = std::max(gateMaxY, box.maximum.y);
+        }
         expect(gateParts == 4, "each gate uses four support colliders, not a solid bounding box");
+        expect(nearlyEqual(gateMaxY, 8.5F),
+            "gate support collider reaches the visible gate height");
 
         const float gateZ = gateIndex == 35 ? 24.0F : -24.0F;
         const CollisionResult edgeSupport = world.resolve(capsuleAt({1.5F, 0.0F, gateZ}),
@@ -169,6 +190,38 @@ void testAuthoredGateOpeningsAndCliffWall() {
         {0.0F, 0.0F, -40.0F}, {0.0F, 0.0F, -12.0F});
     expect(nearlyEqual(southRoad.position.z, -40.0F) && southRoad.contactCount == 0,
         "open south road remains traversable beyond the village gate and former radius-34 clamp");
+    const CollisionResult spawnToNorthGate = world.resolve(capsuleAt({0.0F, 0.0F, 0.0F}),
+        {0.0F, 0.0F, 40.0F}, {0.0F, 0.0F, 40.0F});
+    expect(nearlyEqual(spawnToNorthGate.position.z, 40.0F) && spawnToNorthGate.contactCount == 0,
+        "north spawn road and gate opening are traversable from spawn");
+    const CollisionResult southRoadOffset = world.resolve(capsuleAt({0.0F, 0.0F, 0.0F}),
+        {1.2F, 0.0F, 0.0F}, {1.2F, 0.0F, 0.0F});
+    const CollisionResult spawnToSouthGate = world.resolve(capsuleAt(southRoadOffset.position),
+        {1.2F, 0.0F, -40.0F}, {0.0F, 0.0F, -40.0F});
+    const CollisionResult southRoadRejoin = world.resolve(capsuleAt(spawnToSouthGate.position),
+        {0.0F, 0.0F, -40.0F}, {-1.2F, 0.0F, 0.0F});
+    expect(nearlyEqual(southRoadRejoin.position.z, -40.0F) && southRoadRejoin.contactCount == 0,
+        "south spawn road and gate opening are traversable around the blocking lamp");
+    const CollisionResult northGateReturn = world.resolve(capsuleAt({0.0F, 0.0F, 30.0F}),
+        {0.0F, 0.0F, 18.0F}, {0.0F, 0.0F, -12.0F});
+    expect(nearlyEqual(northGateReturn.position.z, 18.0F) && northGateReturn.contactCount == 0,
+        "north gate opening remains traversable back toward spawn");
+    const CollisionResult southGateReturn = world.resolve(capsuleAt({0.0F, 0.0F, -30.0F}),
+        {0.0F, 0.0F, -18.0F}, {0.0F, 0.0F, 12.0F});
+    expect(nearlyEqual(southGateReturn.position.z, -18.0F) && southGateReturn.contactCount == 0,
+        "south gate opening remains traversable back toward spawn");
+
+    const CollisionResult westSpawnWall = world.resolve(capsuleAt({0.0F, 0.0F, 0.0F}),
+        {-30.0F, 0.0F, 0.0F}, {-30.0F, 0.0F, 0.0F});
+    const CollisionResult eastSpawnWall = world.resolve(capsuleAt({0.0F, 0.0F, 0.0F}),
+        {30.0F, 0.0F, 0.0F}, {30.0F, 0.0F, 0.0F});
+    expect(westSpawnWall.position.x < -7.8F && westSpawnWall.position.x > -9.5F &&
+        westSpawnWall.contactCount > 0,
+        "west wall beside spawn blocks travel from the spawn point");
+    expect(eastSpawnWall.position.x > 7.8F && eastSpawnWall.position.x < 9.5F &&
+        eastSpawnWall.contactCount > 0,
+        "east wall beside spawn blocks travel from the spawn point");
+
     const CollisionResult bossAtNorthGate = world.resolve(Capsule{{0.0F, 0.0F, 18.0F}, 0.55F, 2.2F},
         {0.0F, 0.0F, 30.0F}, {0.0F, 0.0F, 12.0F});
     expect(nearlyEqual(bossAtNorthGate.position.z, 30.0F) && bossAtNorthGate.contactCount == 0,

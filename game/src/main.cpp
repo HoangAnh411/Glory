@@ -1803,7 +1803,13 @@ int main(int argc, char* argv[]) {
                     routeAccumulator += frameDelta;
                     routeElapsed += frameDelta;
                     glory::input::InputFrame routeInput;
-                    if (routeElapsed <= seconds) routeInput.held.push_back(moveControl);
+                    if (routeElapsed <= seconds) {
+                        // The south spawn road has a blocking lamp; offset briefly before heading to the gate.
+                        if (routeIndex == 1 && routeElapsed < 0.25)
+                            routeInput.held.push_back(glory::input::Control::KeyD);
+                        else
+                            routeInput.held.push_back(moveControl);
+                    }
                     while (routeAccumulator + 1.0e-9 >= fixedDelta) {
                         const auto frame = fixedUpdate(fixedDelta, routeInput, cameraYaw, false, {}, {}, false);
                         const glm::vec3 position = controller.state().position;
